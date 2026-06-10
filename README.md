@@ -50,6 +50,13 @@ a symbol; afterwards on the configured interval.
 | `gamma_pin` | Peak gamma strike within 2% of spot | Pin/magnet risk into expiry |
 | `skew_shift` | OTM put IV minus OTM call IV moved ≥4 vol pts vs baseline | Crash protection getting bid, or upside being chased |
 
+Signals carry **catalyst context**: earnings within 7 days appends
+"event premium likely", while IV signals with a known earnings date more
+than 14 days out get flagged "vol bid without an obvious catalyst" — the
+interesting case. Unknown dates get no tag (absence of data isn't absence
+of a catalyst). Windows configurable; earnings dates are fetched once per
+symbol per day and shown in the detail panel.
+
 All thresholds are editable in the UI (the most-used ones) or via
 `PUT /api/config` / `config.json` (all of them).
 

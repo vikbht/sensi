@@ -50,6 +50,11 @@ DEFAULTS = {
     "baseline_snapshots": 6,
     # Suppress repeat alerts of the same kind for a symbol within this window
     "signal_cooldown_minutes": 45,
+    # Earnings within this many days = "event premium likely" tag on signals
+    "earnings_window_days": 7,
+    # IV signals with a KNOWN earnings date beyond this get the
+    # "no obvious catalyst" tag (the interesting case)
+    "no_catalyst_window_days": 14,
 }
 
 _lock = threading.Lock()

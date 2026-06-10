@@ -1,5 +1,6 @@
 """Scan orchestration: fetch data, compute metrics, persist snapshot, run detectors."""
 import logging
+from datetime import date
 
 from . import config, db, market_clock
 from .analytics import signals as detectors
@@ -12,6 +13,36 @@ log = logging.getLogger("sensi.scanner")
 provider = YFinanceProvider()
 
 CONTRACT_MULTIPLIER = 100
+
+# Earnings dates barely move — one provider lookup per symbol per day
+_earnings_cache: dict[str, tuple[date, date | None]] = {}
+
+
+def _next_earnings(symbol: str) -> date | None:
+    today = date.today()
+    hit = _earnings_cache.get(symbol)
+    if hit and hit[0] == today:
+        return hit[1]
+    earnings = provider.get_next_earnings(symbol)
+    _earnings_cache[symbol] = (today, earnings)
+    return earnings
+
+
+def _catalyst_note(days_to_earnings: int | None, kind: str, cfg: dict) -> str:
+    """Suffix that puts a signal in calendar context.
+
+    Unknown earnings dates (None) get no tag — absence of data is not
+    absence of a catalyst.
+    """
+    d = days_to_earnings
+    if d is None:
+        return ""
+    if 0 <= d <= cfg["earnings_window_days"]:
+        return f" · earnings in {d}d — event premium likely"
+    if kind in ("iv_premium", "iv_spike") and d > cfg["no_catalyst_window_days"]:
+        return (f" · no earnings inside {cfg['no_catalyst_window_days']}d "
+                f"(next in {d}d) — vol bid without an obvious catalyst")
+    return ""
 
 
 def _atm_iv(contracts: list[dict], spot: float) -> float | None:
@@ -87,6 +118,8 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
     call_vol = sum(c["volume"] for c in contracts if c["type"] == "call")
     put_vol = sum(c["volume"] for c in contracts if c["type"] == "put")
     net_gex, peak_strike, gex_drivers = _gamma_profile(contracts, spot)
+    earnings = _next_earnings(symbol)
+    days_to_earnings = (earnings - date.today()).days if earnings else None
 
     snap = {
         "symbol": symbol,
@@ -100,6 +133,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         "net_gex": net_gex,
         "peak_gamma_strike": peak_strike,
         "skew": _skew(contracts, spot),
+        "next_earnings": earnings.isoformat() if earnings else None,
     }
 
     # Baseline = snapshots taken BEFORE this scan, scoped to today's session so
@@ -121,9 +155,10 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         # Don't re-alert the same condition on every scan tick
         if db.signal_fired_recently(symbol, sig["kind"], cooldown):
             continue
-        db.insert_signal(symbol, sig["kind"], sig["severity"], sig["message"],
+        message = sig["message"] + _catalyst_note(days_to_earnings, sig["kind"], cfg)
+        db.insert_signal(symbol, sig["kind"], sig["severity"], message,
                          sig.get("value"), sig.get("details"))
-        log.info("%s [%s] %s", symbol, sig["kind"], sig["message"])
+        log.info("%s [%s] %s", symbol, sig["kind"], message)
         emitted.append(sig)
     return emitted
 

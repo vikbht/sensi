@@ -16,6 +16,18 @@ class YFinanceProvider(OptionsDataProvider):
         closes = hist["Close"]
         return float(closes.iloc[-1]), closes
 
+    def get_next_earnings(self, symbol: str) -> date | None:
+        try:
+            cal = yf.Ticker(symbol).calendar
+            dates = cal.get("Earnings Date") if isinstance(cal, dict) else None
+            if not dates:
+                return None
+            today = date.today()
+            future = [d for d in dates if d >= today]
+            return min(future) if future else None
+        except Exception:
+            return None  # unknown — caller must not claim "no catalyst"
+
     def get_option_chain(self, symbol: str, max_expirations: int,
                          min_days_to_expiry: int) -> list[dict]:
         t = yf.Ticker(symbol)

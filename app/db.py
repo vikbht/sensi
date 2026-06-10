@@ -53,8 +53,17 @@ def get_conn() -> sqlite3.Connection:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")
         conn.executescript(SCHEMA)
+        _migrate(conn)
         _local.conn = conn
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Additive migrations for databases created before a column existed."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(snapshots)")}
+    if "next_earnings" not in cols:
+        conn.execute("ALTER TABLE snapshots ADD COLUMN next_earnings TEXT")
+        conn.commit()
 
 
 # --- watchlist ---
@@ -82,9 +91,10 @@ def insert_snapshot(s: dict) -> None:
     conn = get_conn()
     conn.execute(
         """INSERT INTO snapshots(symbol, spot, atm_iv, hv20, hv10, call_volume,
-               put_volume, pc_ratio, net_gex, peak_gamma_strike, skew)
+               put_volume, pc_ratio, net_gex, peak_gamma_strike, skew, next_earnings)
            VALUES (:symbol, :spot, :atm_iv, :hv20, :hv10, :call_volume,
-               :put_volume, :pc_ratio, :net_gex, :peak_gamma_strike, :skew)""",
+               :put_volume, :pc_ratio, :net_gex, :peak_gamma_strike, :skew,
+               :next_earnings)""",
         s,
     )
     conn.commit()
@@ -109,7 +119,7 @@ def latest_metrics() -> list[dict]:
     rows = get_conn().execute(
         """SELECT w.symbol AS symbol, s.spot, s.atm_iv, s.hv20, s.hv10,
                   s.call_volume, s.put_volume, s.pc_ratio, s.net_gex,
-                  s.peak_gamma_strike, s.skew, s.scanned_at,
+                  s.peak_gamma_strike, s.skew, s.scanned_at, s.next_earnings,
                   (SELECT COUNT(*) FROM signals sig WHERE sig.symbol = w.symbol
                      AND sig.created_at >= datetime('now', '-1 day')) AS signals_24h
            FROM watchlist w

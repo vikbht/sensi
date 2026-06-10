@@ -62,6 +62,12 @@ async function refreshTable() {
       const gex = m.net_gex != null
         ? paren('$' + Math.abs(Math.round(m.net_gex)).toLocaleString(), m.net_gex < 0)
         : '—';
+      let earnings = '—';
+      if (m.next_earnings) {
+        const days = Math.round((new Date(m.next_earnings) - Date.now()) / 86400000);
+        earnings = new Date(m.next_earnings).toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+                   (days >= 0 ? ` (${days}d)` : '');
+      }
       dr.innerHTML = `<td colspan="6"><div class="detail-grid">
         ${detailCell('ATM IV', pct(m.atm_iv))}
         ${detailCell('HV 20d', pct(m.hv20))}
@@ -70,6 +76,7 @@ async function refreshTable() {
         ${detailCell('Peak γ strike', m.peak_gamma_strike ?? '—')}
         ${detailCell('Skew (p−c)', pct(m.skew))}
         ${detailCell('Net GEX /1%', gex)}
+        ${detailCell('Earnings', earnings)}
         ${detailCell('Scanned', m.scanned_at ? fmtTime(m.scanned_at) : 'pending')}
       </div></td>`;
       tbody.appendChild(dr);
