@@ -2,6 +2,9 @@ const $ = (sel) => document.querySelector(sel);
 
 // Selected symbol: expands its table row and filters the signal feed
 let selectedSymbol = null;
+// Scan cadence (minutes), kept in sync by loadConfig — drives the
+// "fresh signal" highlight window
+let scanIntervalMin = 5;
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -126,13 +129,21 @@ document.addEventListener('keydown', (e) => {
 
 // ---- signals ----
 
+function isFresh(utc) {
+  const hasTz = /Z$|[+-]\d\d:\d\d$/.test(utc);
+  const ageMin = (Date.now() - new Date(hasTz ? utc : utc + 'Z')) / 60000;
+  return ageMin < Math.max(scanIntervalMin * 2, 10);
+}
+
 function signalCard(s) {
+  const fresh = isFresh(s.created_at);
   const div = document.createElement('div');
-  div.className = `signal ${s.severity}`;
+  div.className = `signal ${s.severity}${fresh ? ' fresh' : ''}`;
   div.innerHTML = `
     <div class="head">
       <span class="sym"></span>
       <span class="kind" title="What does this mean?">${s.kind.replaceAll('_', ' ')}</span>
+      ${fresh ? '<span class="new-pill">new</span>' : ''}
       <span class="time">${fmtTime(s.created_at)}</span>
     </div>
     <div class="msg"></div>`;
@@ -203,6 +214,7 @@ $('#scan-now').onclick = async () => {
 
 async function loadConfig() {
   const cfg = await api('/api/config');
+  scanIntervalMin = cfg.scan_interval_minutes || 5;
   $('#cfg-interval').value = cfg.scan_interval_minutes;
   $('#cfg-ivhv').value = cfg.thresholds.iv_hv_ratio;
   $('#cfg-ivspike').value = cfg.thresholds.iv_spike_pct;
