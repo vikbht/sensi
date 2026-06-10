@@ -1,0 +1,16 @@
+[project]
+name = "options-sensi"
+version = "0.1.0"
+description = "Options Sensi — watchlist scanner for unusual options activity (IV/HV, gamma, flow)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "yfinance>=0.2.40",
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "apscheduler>=3.10",
+]
+
+[tool.uv]
+package = false

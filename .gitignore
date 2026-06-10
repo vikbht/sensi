@@ -1,0 +1,16 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime state — created locally by the app
+sensi.db
+sensi.db-wal
+sensi.db-shm
+config.json
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# OS
+.DS_Store

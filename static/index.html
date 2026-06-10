@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Options Sensi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Options Sensi<span class="dot">.</span></h1>
+  <div class="status-bar">
+    <span id="scan-status" class="pill">idle</span>
+    <span id="last-scan">last scan: —</span>
+    <span id="next-scan">next: —</span>
+    <button id="scan-now">Scan now</button>
+    <button id="help-btn" class="ghost" title="What the numbers mean">?</button>
+  </div>
+</header>
+
+<div id="help-overlay" class="overlay hidden">
+  <div class="help-panel">
+    <div class="help-head">
+      <h2>What the numbers mean</h2>
+      <button id="help-close" class="ghost">✕</button>
+    </div>
+    <div class="help-body">
+
+      <h3>Watchlist columns</h3>
+      <dl>
+        <dt>Price</dt>
+        <dd>The stock price retrieved by this symbol's most recent scan
+        (Yahoo data, ~15 minutes delayed) — not a live tick.</dd>
+        <dt>IV/HV</dt>
+        <dd>At-the-money implied volatility divided by 20-day historical
+        volatility. Near 1.0, options are priced in line with how the stock has
+        actually been moving. Above ~1.25 (highlighted), options are pricing in
+        more movement than the stock has delivered — a catalyst is expected, or
+        premium is rich. Well below 1.0, optionality is cheap relative to
+        realized movement.</dd>
+        <dt>P/C</dt>
+        <dd>Today's put volume ÷ call volume across the scanned expirations.
+        Balanced names sit roughly 0.5–1.2. High (≥2) means heavy put activity
+        — hedging or bearish bets; low (≤0.4) means heavy call activity. The
+        ratio is meaningless on a few opening prints, so alerts on it wait
+        45 minutes into the session and require minimum volume.</dd>
+        <dt>⚡</dt>
+        <dd>Number of signals this symbol fired in the last 24 hours.</dd>
+      </dl>
+
+      <h3>Detail metrics (click a row)</h3>
+      <dl>
+        <dt>ATM IV</dt>
+        <dd>Average implied volatility of the call and put closest to the stock
+        price in the nearest scanned expiry. It's the market's annualized
+        estimate of future movement: 47% IV implies roughly a ±3% expected
+        daily move (annual ÷ √252). IV rises when traders pay up for options —
+        usually ahead of expected news.</dd>
+        <dt>HV 20d</dt>
+        <dd>Annualized volatility the stock has <em>actually realized</em> over
+        the last 20 trading days, from daily closes. The backward-looking
+        counterpart to IV: comparing the two tells you whether options are
+        expensive or cheap relative to how the stock really moves.</dd>
+        <dt>Call vol / Put vol</dt>
+        <dd>Total contracts traded today across the scanned expirations.
+        Volume resets daily and builds as the session goes on.</dd>
+        <dt>Peak γ strike</dt>
+        <dd>The strike with the heaviest gamma × open-interest concentration —
+        the chain's center of gravity. Dealer hedging is most active there, and
+        near expiry it tends to act as a magnet: price gets sticky around
+        big-gamma strikes ("pinning"). When this strike jumps to a new level
+        between scans, positioning is shifting.</dd>
+        <dt>Skew (p−c)</dt>
+        <dd>IV of a ~5% out-of-the-money put minus a ~5% out-of-the-money call.
+        A few points positive is normal — investors persistently overpay for
+        downside protection. Rising skew = crash protection getting bid.
+        Negative (inverted) skew = calls trading richer than puts, the
+        footprint of an upside chase. The change matters more than the level.</dd>
+        <dt>Net GEX /1%</dt>
+        <dd>Estimated dollars of stock that options dealers must trade to stay
+        hedged per 1% move in the underlying. <strong>Positive</strong>:
+        dealers sell rallies and buy dips — their hedging dampens volatility
+        and favors range-bound, pinning behavior. <strong>Negative</strong>:
+        their hedging amplifies moves — faster trends, squeezier tape. Caveat:
+        the sign assumes dealers are long calls and short puts; in names
+        dominated by speculative call buying, the true sign can flip.</dd>
+        <dt>Scanned</dt>
+        <dd>When this row's data was captured.</dd>
+      </dl>
+
+      <h3>Signals</h3>
+      <dl>
+        <dt id="help-iv_premium">IV premium</dt>
+        <dd>ATM IV is at least 1.25× the 20-day historical vol — options are
+        pricing in a much bigger move than the stock has been making. Either
+        the market expects a catalyst, or premium is rich enough to interest
+        sellers.</dd>
+        <dt id="help-iv_spike">IV spike</dt>
+        <dd>ATM IV rose ≥10% versus the average of this session's recent
+        scans — someone is bidding up options <em>right now</em>. Most
+        interesting when the stock price isn't moving.</dd>
+        <dt id="help-unusual_volume">Unusual volume</dt>
+        <dd>A contract is on pace to trade at least 2× its open interest today
+        (volume is projected to full-day pace, so morning and afternoon are
+        judged fairly). Volume far above OI means <em>new</em> positions being
+        opened, not old ones closing.</dd>
+        <dt id="help-put_call_ratio">Put/call ratio</dt>
+        <dd>Today's flow is heavily one-sided: puts ≥2× calls (fear or
+        hedging) or calls ≥2.5× puts (upside speculation).</dd>
+        <dt id="help-gamma_build">Gamma build</dt>
+        <dd>Net gamma exposure grew ≥25% since the previous scan — dealer
+        hedging pressure is building, which will either dampen or amplify
+        moves depending on the sign of GEX.</dd>
+        <dt id="help-gamma_pin">Gamma pin</dt>
+        <dd>The peak gamma strike sits within 2% of the stock price — the
+        setup for pinning, where hedging flows hold price near that strike
+        into expiry. Expect stickiness, not a breakout, unless news hits.</dd>
+        <dt id="help-skew_shift">Skew shift</dt>
+        <dd>Skew moved ≥4 vol points versus this session's baseline. Toward
+        puts: downside protection being bought. Toward calls: upside being
+        chased.</dd>
+      </dl>
+
+      <h3>Conventions &amp; caveats</h3>
+      <dl>
+        <dt>Severity colors</dt>
+        <dd><span class="sev info">blue</span> = informational,
+        <span class="sev warn">yellow</span> = notable,
+        <span class="sev crit">red</span> = strongest readings. Each
+        symbol+signal pair has a 45-minute cooldown so the feed isn't spammed
+        by the same condition every scan.</dd>
+        <dt>Negative numbers</dt>
+        <dd>Shown in parentheses, finance-style: (6.2%) means −6.2%.</dd>
+        <dt>Data &amp; timing</dt>
+        <dd>Quotes are ~15 minutes delayed and illiquid strikes can be stale.
+        Scheduled scans run 9:30–16:00 ET on weekdays only; comparison signals
+        baseline against the current session, so the first scans each morning
+        are intentionally quiet. None of this is financial advice — signals
+        flag anomalies worth researching, not trades.</dd>
+      </dl>
+
+    </div>
+  </div>
+</div>
+
+<main>
+  <aside class="panel side">
+    <h2>Watchlist</h2>
+    <form id="add-form">
+      <input id="symbol-input" placeholder="Add ticker… e.g. NVDA" maxlength="10"
+             autocomplete="off" spellcheck="false">
+      <button type="submit">+</button>
+    </form>
+    <div class="table-wrap">
+      <table id="watch-table">
+        <thead>
+          <tr>
+            <th>Sym</th><th class="num">Price</th><th class="num" title="ATM IV / 20d HV">IV/HV</th>
+            <th class="num" title="Put/Call volume ratio">P/C</th>
+            <th class="num" title="Signals in the last 24h">⚡</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="watch-body"></tbody>
+      </table>
+    </div>
+    <p class="hint">Click a row for full metrics and to filter the feed.</p>
+
+    <h2>Settings</h2>
+    <div class="settings">
+      <label>Scan interval (min)
+        <input type="number" id="cfg-interval" min="1" max="120">
+      </label>
+      <label>IV / HV alert ratio
+        <input type="number" id="cfg-ivhv" min="1" max="5" step="0.05">
+      </label>
+      <label>IV spike % (0.10 = 10%)
+        <input type="number" id="cfg-ivspike" min="0.01" max="1" step="0.01">
+      </label>
+      <label>Vol/OI multiple
+        <input type="number" id="cfg-voloi" min="1" max="20" step="0.5">
+      </label>
+      <button id="save-config">Save settings</button>
+      <span id="config-saved" class="saved-note"></span>
+    </div>
+  </aside>
+
+  <section class="panel grow">
+    <h2>Signal Feed <span id="signal-filter-label"></span>
+      <button id="clear-filter" class="ghost hidden">show all</button>
+    </h2>
+    <div id="signals" class="signal-list">
+      <p class="empty">No signals yet. Add tickers to the watchlist — each new
+      symbol is scanned immediately (even after hours), then the whole list is
+      swept every interval during market hours. Comparison signals (IV spikes,
+      gamma builds, skew shifts) need a few scans of history to baseline.</p>
+    </div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
