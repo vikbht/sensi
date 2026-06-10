@@ -21,12 +21,28 @@ skips the browser; extra args pass through to uvicorn (e.g. `./run.sh --reload`)
 Add tickers and you're done. The first scan runs at boot and whenever you add
 a symbol; afterwards on the configured interval.
 
+## The dashboard
+
+- **Watchlist table** — symbol, last scanned price, IV/HV (highlighted when
+  elevated), put/call ratio, and a 24h signal-count badge. Click a row to
+  expand full metrics (ATM IV, HV, volumes, peak gamma strike, skew, net GEX)
+  and filter the feed to that name. Negative numbers render finance-style in
+  parentheses.
+- **Signal feed** — split into **Today** and **Older** sections; entries
+  younger than ~2 scan intervals get a brighter card and a `new` pill so the
+  latest information stands out. Click a signal's kind label (e.g. GAMMA
+  FLIP) to jump straight to its explanation in the help glossary.
+- **Help glossary** — the `?` button explains every metric and signal in
+  plain English, including how to read skew, net GEX, and pinning.
+- **Settings** — collapsible panel for the scan interval and the most-used
+  thresholds; the header shows market open/closed and last/next scan times.
+
 ## Implemented signals
 
 | Signal | What it detects | Why it matters |
 |---|---|---|
 | `iv_premium` | ATM IV ≥ 1.25× 20-day HV | Options pricing in a bigger move than the stock has realized — possible event/catalyst, or rich premium to sell |
-| `iv_spike` | ATM IV rising ≥10% vs the average of recent scans | Someone is bidding up vol *right now* |
+| `iv_spike` | ATM IV rising ≥10% vs the average of recent scans | Someone is bidding up vol *right now* — the message says whether the stock was flat (often precedes news), falling (reactive hedging), or rallying (upside chase) alongside |
 | `unusual_volume` | Contract volume on pace for ≥ 2× open interest (min 500 lots at day pace) | New positioning today, not closing of old positions |
 | `put_call_ratio` | P/C volume ratio > 2.0 or < 0.4 | One-sided directional flow |
 | `gamma_build` | Net GEX up ≥25% scan-over-scan (same sign, ≥ $5M floor) | Dealer hedging pressure building — message says whether it stabilizes or destabilizes the tape, and names the driver strikes |
@@ -37,7 +53,13 @@ a symbol; afterwards on the configured interval.
 All thresholds are editable in the UI (the most-used ones) or via
 `PUT /api/config` / `config.json` (all of them).
 
-## More ideas worth adding
+## Roadmap
+
+The live roadmap is the [issue tracker](https://github.com/vikbht/sensi/issues)
+— features are `enhancement` issues grouped into
+[milestones](https://github.com/vikbht/sensi/milestones), bugs carry root
+cause and resolution, and commits close them with `Fixes`/`Closes #N`. The
+themes below feed that backlog.
 
 **Flow-quality signals** (need tick/trade-level data — Polygon, CBOE DataShop, or UW):
 - **Sweeps vs blocks** — multi-exchange sweeps at the ask are aggressive, informed-looking buying; single-exchange blocks at mid are often institutional hedges.
@@ -65,6 +87,7 @@ All thresholds are editable in the UI (the most-used ones) or via
 app/
   main.py                 FastAPI routes + APScheduler (interval rescheduled live)
   scanner.py              fetch → compute snapshot → persist → run detectors
+  market_clock.py         ET session math: market hours, day-pace projection
   config.py               config.json load/save with defaults
   db.py                   SQLite: watchlist, snapshots, signals
   analytics/
@@ -90,8 +113,9 @@ static/                   vanilla-JS dashboard (no build step)
 - Volume-based signals are projected to full-day pace, and comparison signals
   (IV spike, gamma build, skew shift) baseline only against the current
   session, so they stay quiet for the first couple of scans each morning.
-- Snapshots are kept 30 days and signals 90 (configurable), purged after each
-  sweep; the DB runs in WAL mode for concurrent scanner/API access.
+- Snapshots are kept 30 days (they feed future detectors like IV rank) and
+  signals 5 days (alerts get stale fast), both configurable; purged after
+  each sweep. The DB runs in WAL mode for concurrent scanner/API access.
 - Keep the watchlist modest (≲15 names at 5-min intervals) to avoid Yahoo
   rate-limiting; each symbol costs ~1 + `max_expirations` requests per scan.
 - This flags *anomalies*, not trades. Everything here is a starting point for
