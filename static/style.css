@@ -72,6 +72,9 @@ tr.watch-row.active td { background: #1f3a5f; }
 tr.watch-row .sym { font-weight: 700; color: var(--accent); }
 tr.watch-row .stale { color: var(--muted); }
 td .hot { color: var(--yellow); }
+.chg { font-size: 11px; font-weight: 600; }
+.chg.up { color: var(--green); }
+.chg.down { color: var(--red); }
 .flame { margin-right: 3px; font-size: 11px; }
 .badge {
   display: inline-block; min-width: 18px; text-align: center;

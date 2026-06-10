@@ -63,7 +63,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {row[1] for row in conn.execute("PRAGMA table_info(snapshots)")}
     if "next_earnings" not in cols:
         conn.execute("ALTER TABLE snapshots ADD COLUMN next_earnings TEXT")
-        conn.commit()
+    if "prev_close" not in cols:
+        conn.execute("ALTER TABLE snapshots ADD COLUMN prev_close REAL")
+    conn.commit()
 
 
 # --- watchlist ---
@@ -91,10 +93,11 @@ def insert_snapshot(s: dict) -> None:
     conn = get_conn()
     conn.execute(
         """INSERT INTO snapshots(symbol, spot, atm_iv, hv20, hv10, call_volume,
-               put_volume, pc_ratio, net_gex, peak_gamma_strike, skew, next_earnings)
+               put_volume, pc_ratio, net_gex, peak_gamma_strike, skew, next_earnings,
+               prev_close)
            VALUES (:symbol, :spot, :atm_iv, :hv20, :hv10, :call_volume,
                :put_volume, :pc_ratio, :net_gex, :peak_gamma_strike, :skew,
-               :next_earnings)""",
+               :next_earnings, :prev_close)""",
         s,
     )
     conn.commit()
@@ -120,6 +123,7 @@ def latest_metrics() -> list[dict]:
         """SELECT w.symbol AS symbol, s.spot, s.atm_iv, s.hv20, s.hv10,
                   s.call_volume, s.put_volume, s.pc_ratio, s.net_gex,
                   s.peak_gamma_strike, s.skew, s.scanned_at, s.next_earnings,
+                  s.prev_close,
                   (SELECT COUNT(*) FROM signals sig WHERE sig.symbol = w.symbol
                      AND sig.created_at >= datetime('now', '-1 day')) AS signals_24h,
                   (SELECT COUNT(*) FROM signals sig WHERE sig.symbol = w.symbol

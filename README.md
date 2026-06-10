@@ -23,8 +23,10 @@ a symbol; afterwards on the configured interval.
 
 ## The dashboard
 
-- **Watchlist table** — symbol, last scanned price, IV/HV (highlighted when
-  elevated), put/call ratio, and a 24h signal-count badge. Click a row to
+- **Watchlist table** — symbol, last scanned price with day change vs the
+  previous close (green ▲ / red ▼), IV/HV (highlighted when elevated),
+  put/call ratio, and a 24h signal-count badge (🔥 marks a confluence in
+  the last 24h). Click a row to
   expand full metrics (ATM IV, HV, volumes, peak gamma strike, skew, net GEX)
   and filter the feed to that name. Negative numbers render finance-style in
   parentheses.

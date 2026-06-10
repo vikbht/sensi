@@ -29,6 +29,18 @@ def _next_earnings(symbol: str) -> date | None:
     return earnings
 
 
+def _prev_close(closes) -> float | None:
+    """Previous session's close: skip the trailing bar when it's today's
+    (still-forming or just-completed) session, so day change = spot vs
+    yesterday's close."""
+    if closes is None or len(closes) == 0:
+        return None
+    last_bar_date = closes.index[-1].date()
+    if last_bar_date >= market_clock.now_et().date() and len(closes) > 1:
+        return float(closes.iloc[-2])
+    return float(closes.iloc[-1])
+
+
 def _catalyst_note(days_to_earnings: int | None, kind: str, cfg: dict) -> str:
     """Suffix that puts a signal in calendar context.
 
@@ -135,6 +147,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         "peak_gamma_strike": peak_strike,
         "skew": _skew(contracts, spot),
         "next_earnings": earnings.isoformat() if earnings else None,
+        "prev_close": _prev_close(closes),
     }
 
     # Baseline = snapshots taken BEFORE this scan, scoped to today's session so

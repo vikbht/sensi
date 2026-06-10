@@ -39,7 +39,13 @@ async function refreshTable() {
     const tr = document.createElement('tr');
     tr.className = 'watch-row' + (m.symbol === selectedSymbol ? ' active' : '');
     const ivhv = m.atm_iv && m.hv20 ? m.atm_iv / m.hv20 : null;
-    const price = m.spot != null ? '$' + m.spot.toFixed(2) : '…';
+    let price = m.spot != null ? '$' + m.spot.toFixed(2) : '…';
+    if (m.spot != null && m.prev_close) {
+      const chg = (m.spot - m.prev_close) / m.prev_close;
+      const dir = chg >= 0 ? 'up' : 'down';
+      const arrow = chg >= 0 ? '▲' : '▼';
+      price += ` <span class="chg ${dir}">${arrow}${Math.abs(chg * 100).toFixed(1)}%</span>`;
+    }
     tr.innerHTML = `
       <td class="sym">${m.symbol}</td>
       <td class="num ${m.spot == null ? 'stale' : ''}">${price}</td>
