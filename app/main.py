@@ -58,6 +58,10 @@ def _schedule_job(minutes: int):
 async def lifespan(app: FastAPI):
     cfg = config.load()
     _schedule_job(cfg["scan_interval_minutes"])
+    scheduler.add_job(scanner.generate_daily_wrap, "cron",
+                      day_of_week="mon-fri", hour=16, minute=15,
+                      timezone=market_clock.ET, id="daily_wrap",
+                      replace_existing=True)
     scheduler.start()
     threading.Thread(target=_run_scan, daemon=True).start()  # scan on boot
     yield
@@ -122,6 +126,13 @@ def put_config(cfg: dict):
 @app.post("/api/scan")
 def trigger_scan():
     threading.Thread(target=_run_scan, kwargs={"force": True}, daemon=True).start()
+    return {"started": True}
+
+
+@app.post("/api/wrap")
+def trigger_wrap():
+    threading.Thread(target=scanner.generate_daily_wrap,
+                     kwargs={"force": True}, daemon=True).start()
     return {"started": True}
 
 

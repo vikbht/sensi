@@ -30,7 +30,9 @@ a symbol; afterwards on the configured interval.
   expand full metrics (ATM IV, HV, volumes, peak gamma strike, skew, net GEX)
   and filter the feed to that name. Negative numbers render finance-style in
   parentheses.
-- **Signal feed** — split into **Today** and **Older** sections; entries
+- **Signal feed** — split into **Today** and **Older** sections; a purple
+  **daily wrap** card lands at 4:15 PM ET summarizing every name's day
+  (`POST /api/wrap` regenerates it manually); entries
   younger than ~2 scan intervals get a brighter card and a `new` pill so the
   latest information stands out. Click a signal's kind label (e.g. GAMMA
   FLIP) to jump straight to its explanation in the help glossary.
@@ -52,6 +54,7 @@ a symbol; afterwards on the configured interval.
 | `gamma_pin` | Peak gamma strike within 2% of spot | Pin/magnet risk into expiry |
 | `skew_shift` | OTM put IV minus OTM call IV moved ≥4 vol pts vs baseline | Crash protection getting bid, or upside being chased |
 | `confluence` | ≥3 distinct signal kinds on one symbol within 4h | Independent detectors agreeing — the strongest pattern here; flagged 🔥 in the watchlist |
+| `daily_wrap` | Generated 4:15 PM ET each market day | One card per day: every name's move, IV change, top signal, and what stayed elevated at the close |
 
 Signals carry **catalyst context**: earnings within 7 days appends
 "event premium likely", while IV signals with a known earnings date more

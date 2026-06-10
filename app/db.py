@@ -171,6 +171,23 @@ def purge_old(snapshot_days: int, signal_days: int) -> tuple[int, int]:
     return snaps, sigs
 
 
+def last_snapshot_before(symbol: str, before_utc: str) -> dict | None:
+    row = get_conn().execute(
+        """SELECT * FROM snapshots WHERE symbol = ? AND scanned_at < ?
+           ORDER BY scanned_at DESC, id DESC LIMIT 1""",
+        (symbol, before_utc),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def signals_since(symbol: str, since_utc: str) -> list[dict]:
+    rows = get_conn().execute(
+        "SELECT * FROM signals WHERE symbol = ? AND created_at >= ? ORDER BY id",
+        (symbol, since_utc),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def distinct_signal_kinds_since(symbol: str, minutes: int) -> list[str]:
     """Distinct non-confluence signal kinds for a symbol in the window."""
     rows = get_conn().execute(

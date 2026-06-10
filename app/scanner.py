@@ -181,6 +181,86 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
     return emitted
 
 
+_SEV_RANK = {"critical": 3, "warning": 2, "info": 1}
+
+
+def _headline(sigs: list[dict]) -> dict | None:
+    """Most significant signal of the day: confluence beats severity beats recency."""
+    real = [s for s in sigs if s["kind"] != "daily_wrap"]
+    if not real:
+        return None
+    best = max(real, key=lambda s: (
+        4 if s["kind"] == "confluence" else _SEV_RANK.get(s["severity"], 0), s["id"]))
+    text = best["message"]
+    if len(text) > 130:
+        text = text[:127].rsplit(" ", 1)[0] + "…"
+    return {"kind": best["kind"], "text": text}
+
+
+def generate_daily_wrap(force: bool = False) -> bool:
+    """One pinned card summarizing every watchlist name's day. Runs at the
+    cron tick after the close; `force` (manual /api/wrap) bypasses the
+    once-per-day guard."""
+    cfg = config.load()
+    symbols = db.list_watchlist()
+    if not symbols:
+        return False
+    if not force and db.signal_fired_recently("MARKET", "daily_wrap", 18 * 60):
+        return False
+
+    session_start = market_clock.session_start_utc()
+    rows, quiet, stuck = [], [], []
+    total_signals = total_confluences = 0
+    for sym in symbols:
+        snaps = db.recent_snapshots(sym, 500, since_utc=session_start)
+        sigs = db.signals_since(sym, session_start)
+        total_signals += len(sigs)
+        confluences = sum(1 for s in sigs if s["kind"] == "confluence")
+        total_confluences += confluences
+        if not sigs:
+            quiet.append(sym)
+
+        last = snaps[0] if snaps else None
+        # IV day change references the prior session's close, not today's
+        # first scan — Yahoo IVs in the opening minutes are placeholder junk
+        prior = db.last_snapshot_before(sym, session_start)
+        day_chg = iv_now = iv_chg_pts = None
+        if last:
+            if last.get("spot") and last.get("prev_close"):
+                day_chg = (last["spot"] - last["prev_close"]) / last["prev_close"]
+            iv_now = last.get("atm_iv")
+            if iv_now and prior and prior.get("atm_iv"):
+                iv_chg_pts = (iv_now - prior["atm_iv"]) * 100
+            if confluences:
+                stuck.append(f"{sym} confluence unresolved into tomorrow")
+            elif (iv_now and last.get("hv20")
+                    and iv_now / last["hv20"] >= cfg["thresholds"]["iv_hv_ratio"]):
+                stuck.append(f"{sym} IV still {iv_now / last['hv20']:.2f}x HV at the close")
+        rows.append({
+            "symbol": sym,
+            "day_chg": round(day_chg, 4) if day_chg is not None else None,
+            "atm_iv": round(iv_now, 4) if iv_now is not None else None,
+            "iv_chg_pts": round(iv_chg_pts, 1) if iv_chg_pts is not None else None,
+            "signals": len(sigs),
+            "confluence": confluences > 0,
+            "headline": _headline(sigs),
+        })
+
+    day = market_clock.now_et().strftime("%a %b %d")
+    summary = (f"Daily wrap {day} — {len(symbols)} names, {total_signals} signals, "
+               f"{total_confluences} confluence(s). "
+               + ("What stuck: " + "; ".join(stuck) + "." if stuck
+                  else "Nothing left elevated at the close."))
+    details = json.dumps({
+        "date": day, "names": len(symbols), "signals": total_signals,
+        "confluences": total_confluences, "rows": rows,
+        "stuck": stuck, "quiet": quiet,
+    })
+    db.insert_signal("MARKET", "daily_wrap", "info", summary, float(total_signals), details)
+    log.info("daily wrap generated: %s", summary)
+    return True
+
+
 def _check_confluence(symbol: str, cfg: dict) -> dict | None:
     """Several independent detectors agreeing beats any single alert.
 

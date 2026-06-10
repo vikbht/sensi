@@ -167,6 +167,46 @@ function signalCard(s) {
   return div;
 }
 
+function wrapCard(s) {
+  let d = {};
+  try { d = JSON.parse(s.details) || {}; } catch { /* fall through to plain card */ }
+  const div = document.createElement('div');
+  div.className = 'signal wrap' + (isFresh(s.created_at) ? ' fresh' : '');
+  const fmtChg = (v) => v == null ? '—'
+    : `<span class="${v >= 0 ? 'up' : 'down'} chg">${v >= 0 ? '▲' : '▼'}${Math.abs(v * 100).toFixed(1)}%</span>`;
+  const fmtIv = (r) => {
+    if (r.atm_iv == null) return '—';
+    let out = (r.atm_iv * 100).toFixed(0) + '%';
+    if (r.iv_chg_pts != null) {
+      const cls = r.iv_chg_pts >= 0 ? 'iv-up' : 'iv-down';
+      out += ` <span class="${cls}">${r.iv_chg_pts >= 0 ? '+' : ''}${r.iv_chg_pts.toFixed(1)}pt</span>`;
+    }
+    return out;
+  };
+  const rows = (d.rows || []).map((r) => `
+    <span class="sym" data-sym="${r.symbol}">${r.symbol}</span>
+    <span>${fmtChg(r.day_chg)}</span>
+    <span>${fmtIv(r)}</span>
+    <span class="headline">${r.confluence ? '🔥 ' : ''}${r.headline
+      ? r.headline.text.replace(/</g, '&lt;') : '<span class="quiet-note">quiet — no signals</span>'}</span>`).join('');
+  div.innerHTML = `
+    <div class="head">
+      <span class="wrap-title">Daily wrap</span>
+      <span class="kind">${d.date || ''} · ${d.names ?? '?'} names · ${d.signals ?? '?'} signals · ${d.confluences ?? 0} confluence(s)</span>
+      <span class="time">${fmtTime(s.created_at)}</span>
+    </div>
+    <div class="wrap-grid">
+      <span class="wrap-h">sym</span><span class="wrap-h">day</span><span class="wrap-h">ATM IV</span><span class="wrap-h">headline</span>
+      ${rows}
+    </div>
+    ${d.stuck && d.stuck.length ? `<div class="stuck">What stuck: ${d.stuck.join(' · ')}</div>`
+      : '<div class="stuck">Nothing left elevated at the close.</div>'}`;
+  div.querySelectorAll('.sym[data-sym]').forEach((el) => {
+    el.onclick = () => setFilter(el.dataset.sym);
+  });
+  return div;
+}
+
 function isToday(utc) {
   const hasTz = /Z$|[+-]\d\d:\d\d$/.test(utc);
   const d = new Date(hasTz ? utc : utc + 'Z');
@@ -197,11 +237,11 @@ async function refreshSignals() {
     box.insertAdjacentHTML('beforeend',
       '<p class="feed-empty">No signals yet today.</p>');
   }
-  for (const s of today) box.appendChild(signalCard(s));
+  for (const s of today) box.appendChild(s.kind === 'daily_wrap' ? wrapCard(s) : signalCard(s));
 
   if (older.length) {
     feedSection(box, 'Older');
-    for (const s of older) box.appendChild(signalCard(s));
+    for (const s of older) box.appendChild(s.kind === 'daily_wrap' ? wrapCard(s) : signalCard(s));
   }
 }
 
