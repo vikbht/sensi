@@ -43,8 +43,10 @@ def detect_iv_premium(snap: dict, history: list[dict], th: dict) -> list[dict]:
         out.append({
             "kind": "iv_premium",
             "severity": sev,
-            "message": (f"ATM IV {iv:.1%} is {ratio:.2f}x 20d HV {hv:.1%} — "
-                        f"options pricing in a move well above realized"),
+            "message": (f"ATM IV {iv:.1%} is {ratio:.2f}x the 20d realized vol {hv:.1%} — "
+                        f"options price in far more movement than the stock has "
+                        f"delivered: either a catalyst is expected, or premium "
+                        f"is rich for sellers"),
             "value": round(ratio, 3),
             "details": json.dumps({"atm_iv": iv, "hv20": hv}),
         })
@@ -60,11 +62,25 @@ def detect_iv_spike(snap: dict, history: list[dict], th: dict) -> list[dict]:
     chg = (iv - base) / base
     if chg >= th["iv_spike_pct"]:
         sev = "critical" if chg >= th["iv_spike_pct"] * 2 else "warning"
+        # What the stock did alongside changes the meaning entirely
+        spot, spot_base = snap.get("spot"), _baseline(history, "spot")
+        px_note = ""
+        if spot and spot_base:
+            px_chg = (spot - spot_base) / spot_base
+            if abs(px_chg) < 0.01:
+                px_note = (f" with the stock flat ({px_chg:+.1%}) — vol getting "
+                           f"bid without a price move often precedes news")
+            elif px_chg < 0:
+                px_note = (f" alongside a {px_chg:.1%} slide — looks like "
+                           f"reactive hedging on the way down")
+            else:
+                px_note = (f" alongside a {px_chg:+.1%} rally — upside "
+                           f"being chased")
         out.append({
             "kind": "iv_spike",
             "severity": sev,
-            "message": (f"ATM IV rising: {base:.1%} → {iv:.1%} "
-                        f"(+{chg:.1%} vs recent scans)"),
+            "message": (f"ATM IV climbing {base:.1%} → {iv:.1%} "
+                        f"(+{chg:.0%} vs recent scans){px_note}"),
             "value": round(chg, 4),
             "details": json.dumps({"atm_iv": iv, "baseline_iv": base}),
         })
@@ -95,13 +111,34 @@ def detect_unusual_volume(snap: dict, contracts: list[dict], th: dict,
     top = hits[:5]
     lead = top[0]
     pace_note = "" if pace >= 1.0 else " at day pace"
+
+    n_calls = sum(1 for h in hits if h["type"] == "call")
+    n_puts = len(hits) - n_calls
+    split = (f"{n_calls} calls / {n_puts} puts" if n_calls and n_puts
+             else "all calls" if n_calls else "all puts")
+
+    spot = snap.get("spot")
+    mny = ""
+    if spot:
+        d = (lead["strike"] - spot) / spot
+        if abs(d) < 0.01:
+            mny = ", at the money"
+        else:
+            otm = d > 0 if lead["type"] == "call" else d < 0
+            mny = f", {abs(d):.0%} {'OTM' if otm else 'ITM'}"
+    # Volume dwarfing a near-empty strike = a newly active line, not turnover
+    tail = (" on a nearly empty strike — a freshly active line"
+            if lead["open_interest"] < 100
+            else " — volume far above OI means new positions opening, not closing")
+
     return [{
         "kind": "unusual_volume",
         "severity": "critical" if lead["vol_oi_pace"] >= th["uoa_vol_oi_ratio"] * 3 else "warning",
-        "message": (f"{len(hits)} contract(s) running ≥ {th['uoa_vol_oi_ratio']}x OI{pace_note}; "
-                    f"top: {lead['type']} ${lead['strike']:g} {lead['expiry']} "
-                    f"vol {lead['volume']:,} ({lead['vol_oi_pace']}x OI{pace_note}) "
-                    f"vs OI {lead['open_interest']:,}"),
+        "message": (f"{len(hits)} contract(s) running ≥ {th['uoa_vol_oi_ratio']}x OI{pace_note} "
+                    f"({split}); biggest: {lead['type']}s ${lead['strike']:g} "
+                    f"exp {lead['expiry']} ({lead['dte']}d{mny}), "
+                    f"{lead['volume']:,} traded vs {lead['open_interest']:,} OI "
+                    f"({lead['vol_oi_pace']}x{pace_note}){tail}"),
         "value": lead["vol_oi_pace"],
         "details": json.dumps(top),
     }]
@@ -118,19 +155,27 @@ def detect_pc_ratio(snap: dict, history: list[dict], th: dict, ctx: dict) -> lis
     total_vol = (snap.get("call_volume") or 0) + (snap.get("put_volume") or 0)
     if total_vol < th["pc_min_total_volume"]:
         return []
+    cv = snap.get("call_volume") or 0
+    pv = snap.get("put_volume") or 0
     if pc >= th["pc_ratio_high"]:
         return [{
             "kind": "put_call_ratio",
             "severity": "warning",
-            "message": f"Put/call volume ratio elevated at {pc:.2f} — heavy put activity",
+            "message": (f"Puts trading {pc:.1f}x calls today ({pv:,} vs {cv:,}) — "
+                        f"one-sided downside flow: protection being bought "
+                        f"or bearish bets building"),
             "value": pc,
             "details": None,
         }]
     if pc <= th["pc_ratio_low"]:
+        ratio = cv / pv if pv else float("inf")
+        ratio_txt = f"{ratio:.1f}x" if pv else "∞x"
         return [{
             "kind": "put_call_ratio",
             "severity": "warning",
-            "message": f"Put/call volume ratio depressed at {pc:.2f} — heavy call activity",
+            "message": (f"Calls trading {ratio_txt} puts today ({cv:,} vs {pv:,}) — "
+                        f"one-sided upside flow: speculative call buying "
+                        f"dominating the tape"),
             "value": pc,
             "details": None,
         }]
@@ -189,7 +234,9 @@ def detect_gamma(snap: dict, history: list[dict], th: dict) -> list[dict]:
                 "kind": "gamma_pin",
                 "severity": "info",
                 "message": (f"Peak gamma strike ${peak:g} sits {dist:.1%} from spot "
-                            f"${spot:,.2f} — potential pinning / magnet into expiry"),
+                            f"${spot:,.2f} — hedging flows tend to hold price near "
+                            f"that strike into expiry: expect stickiness, with "
+                            f"small moves away getting faded"),
                 "value": round(dist, 4),
                 "details": json.dumps({"peak_strike": peak, "spot": spot}),
             })
@@ -203,11 +250,17 @@ def detect_skew_shift(snap: dict, history: list[dict], th: dict) -> list[dict]:
         return []
     shift = skew - base
     if abs(shift) >= th["skew_shift_pts"]:
-        direction = "puts bid (downside fear)" if shift > 0 else "calls bid (upside chase)"
+        if shift > 0:
+            read = ("downside protection getting bid — hedging demand or "
+                    "fear rising; most telling if the stock isn't falling")
+        else:
+            read = ("calls getting bid relative to puts — upside being "
+                    "chased; the footprint of speculation or accumulation")
         return [{
             "kind": "skew_shift",
             "severity": "warning",
-            "message": (f"IV skew moved {shift:+.1%} vs recent scans — {direction}"),
+            "message": (f"Skew (put−call IV) moved {base:+.1%} → {skew:+.1%} "
+                        f"({shift * 100:+.1f} vol pts vs recent scans): {read}"),
             "value": round(shift, 4),
             "details": json.dumps({"skew": skew, "baseline_skew": base}),
         }]
