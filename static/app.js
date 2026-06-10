@@ -126,6 +126,36 @@ document.addEventListener('keydown', (e) => {
 
 // ---- signals ----
 
+function signalCard(s) {
+  const div = document.createElement('div');
+  div.className = `signal ${s.severity}`;
+  div.innerHTML = `
+    <div class="head">
+      <span class="sym"></span>
+      <span class="kind" title="What does this mean?">${s.kind.replaceAll('_', ' ')}</span>
+      <span class="time">${fmtTime(s.created_at)}</span>
+    </div>
+    <div class="msg"></div>`;
+  div.querySelector('.sym').textContent = s.symbol;
+  div.querySelector('.sym').onclick = () => setFilter(s.symbol);
+  div.querySelector('.kind').onclick = () => openHelp('help-' + s.kind);
+  div.querySelector('.msg').textContent = s.message;
+  return div;
+}
+
+function isToday(utc) {
+  const hasTz = /Z$|[+-]\d\d:\d\d$/.test(utc);
+  const d = new Date(hasTz ? utc : utc + 'Z');
+  return d.toDateString() === new Date().toDateString();
+}
+
+function feedSection(box, label) {
+  const head = document.createElement('div');
+  head.className = 'feed-section';
+  head.textContent = label;
+  box.appendChild(head);
+}
+
 async function refreshSignals() {
   const qs = selectedSymbol ? `&symbol=${selectedSymbol}` : '';
   const signals = await api(`/api/signals?limit=100${qs}`);
@@ -133,21 +163,21 @@ async function refreshSignals() {
   if (!signals.length && !selectedSymbol) return; // keep the explainer
   box.innerHTML = signals.length ? '' :
     `<p class="empty">No signals for ${selectedSymbol} yet.</p>`;
-  for (const s of signals) {
-    const div = document.createElement('div');
-    div.className = `signal ${s.severity}`;
-    div.innerHTML = `
-      <div class="head">
-        <span class="sym"></span>
-        <span class="kind" title="What does this mean?">${s.kind.replaceAll('_', ' ')}</span>
-        <span class="time">${fmtTime(s.created_at)}</span>
-      </div>
-      <div class="msg"></div>`;
-    div.querySelector('.sym').textContent = s.symbol;
-    div.querySelector('.sym').onclick = () => setFilter(s.symbol);
-    div.querySelector('.kind').onclick = () => openHelp('help-' + s.kind);
-    div.querySelector('.msg').textContent = s.message;
-    box.appendChild(div);
+  if (!signals.length) return;
+
+  const today = signals.filter(s => isToday(s.created_at));
+  const older = signals.filter(s => !isToday(s.created_at));
+
+  feedSection(box, 'Today');
+  if (!today.length) {
+    box.insertAdjacentHTML('beforeend',
+      '<p class="feed-empty">No signals yet today.</p>');
+  }
+  for (const s of today) box.appendChild(signalCard(s));
+
+  if (older.length) {
+    feedSection(box, 'Older');
+    for (const s of older) box.appendChild(signalCard(s));
   }
 }
 
@@ -194,6 +224,13 @@ $('#save-config').onclick = async () => {
   setTimeout(() => { $('#config-saved').textContent = ''; }, 2000);
   refreshStatus();
 };
+
+// Settings panel: collapsed by default, remember the user's choice
+const settingsBox = $('#settings-box');
+settingsBox.open = localStorage.getItem('sensi-settings-open') === '1';
+settingsBox.addEventListener('toggle', () => {
+  localStorage.setItem('sensi-settings-open', settingsBox.open ? '1' : '0');
+});
 
 // ---- main loop ----
 

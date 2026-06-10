@@ -165,7 +165,8 @@
     </div>
     <p class="hint">Click a row for full metrics and to filter the feed.</p>
 
-    <h2>Settings</h2>
+    <details id="settings-box">
+    <summary>Settings</summary>
     <div class="settings">
       <label>Scan interval (min)
         <input type="number" id="cfg-interval" min="1" max="120">
@@ -182,6 +183,7 @@
       <button id="save-config">Save settings</button>
       <span id="config-saved" class="saved-note"></span>
     </div>
+    </details>
   </aside>
 
   <section class="panel grow">

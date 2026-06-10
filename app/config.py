@@ -10,9 +10,11 @@ DEFAULTS = {
     "scan_interval_minutes": 5,
     # Only run scheduled scans 9:30-16:00 ET Mon-Fri (manual "Scan now" always runs)
     "market_hours_only": True,
-    # Age-based cleanup, applied after each sweep
+    # Age-based cleanup, applied after each sweep. Snapshots stay longer —
+    # they're the raw history future detectors (IV rank etc.) will need;
+    # signals are ephemeral alerts and just become clutter.
     "snapshot_retention_days": 30,
-    "signal_retention_days": 90,
+    "signal_retention_days": 5,
     # How many expirations to pull per symbol (keep small to stay under rate limits)
     "max_expirations": 3,
     # Skip expirations closer than this many days (expiry-day IV is noisy)
