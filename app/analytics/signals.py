@@ -12,6 +12,18 @@ project it to full-day pace via ctx["pace_divisor"].
 import json
 
 
+def _dollars(x: float) -> str:
+    """Signed, humanized dollars: +$205M, -$1.2B."""
+    a = abs(x)
+    for div, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if a >= div:
+            body = f"${a / div:.1f}{suffix}"
+            break
+    else:
+        body = f"${a:.0f}"
+    return ("-" if x < 0 else "+") + body
+
+
 def _baseline(history: list[dict], field: str) -> float | None:
     """Average of a field over prior snapshots (history excludes the current one)."""
     vals = [s[field] for s in history if s.get(field) is not None]
@@ -129,19 +141,46 @@ def detect_gamma(snap: dict, history: list[dict], th: dict) -> list[dict]:
     out = []
     gex = snap.get("net_gex")
     prev = history[0] if history else None
-    if gex is not None and prev and prev.get("net_gex"):
-        prev_gex = prev["net_gex"]
-        if abs(prev_gex) > 0:
-            chg = (abs(gex) - abs(prev_gex)) / abs(prev_gex)
-            if chg >= th["gamma_change_pct"]:
-                out.append({
-                    "kind": "gamma_build",
-                    "severity": "warning",
-                    "message": (f"Net gamma exposure building: {prev_gex:,.0f} → {gex:,.0f} "
-                                f"(+{chg:.0%} since last scan)"),
-                    "value": round(chg, 3),
-                    "details": json.dumps({"net_gex": gex, "prev_gex": prev_gex}),
-                })
+    prev_gex = prev.get("net_gex") if prev else None
+    if gex is not None and prev_gex:
+        flipped = (gex > 0) != (prev_gex > 0) and gex != 0
+        swing = abs(gex - prev_gex) / abs(prev_gex)
+        chg = (abs(gex) - abs(prev_gex)) / abs(prev_gex)
+        if flipped and swing >= th["gamma_change_pct"]:
+            # A sign change is a regime change — the most consequential gamma
+            # event, and invisible to the |gex| growth check below
+            if gex < 0:
+                msg = (f"Gamma regime flipped negative: net GEX {_dollars(prev_gex)} → "
+                       f"{_dollars(gex)}. Dealer hedging now amplifies moves — "
+                       f"expect faster, trendier price action and squeeze risk.")
+                sev = "critical"
+            else:
+                msg = (f"Gamma regime flipped positive: net GEX {_dollars(prev_gex)} → "
+                       f"{_dollars(gex)}. Dealer hedging now dampens moves — "
+                       f"favors range-bound, pinned trading.")
+                sev = "warning"
+            out.append({
+                "kind": "gamma_flip",
+                "severity": sev,
+                "message": msg,
+                "value": round(swing, 3),
+                "details": json.dumps({"net_gex": gex, "prev_gex": prev_gex}),
+            })
+        elif chg >= th["gamma_change_pct"]:
+            if gex > 0:
+                flavor = ("stabilizing gamma — dealer hedging leans harder against "
+                          "moves, favoring range-bound, pinned trading")
+            else:
+                flavor = ("destabilizing gamma — dealer hedging amplifies moves, "
+                          "raising swing and squeeze risk")
+            out.append({
+                "kind": "gamma_build",
+                "severity": "warning",
+                "message": (f"Net GEX {_dollars(prev_gex)} → {_dollars(gex)} "
+                            f"(+{chg:.0%} since last scan): building {flavor}."),
+                "value": round(chg, 3),
+                "details": json.dumps({"net_gex": gex, "prev_gex": prev_gex}),
+            })
     peak, spot = snap.get("peak_gamma_strike"), snap.get("spot")
     if peak and spot:
         dist = abs(peak - spot) / spot

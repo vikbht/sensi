@@ -29,7 +29,8 @@ a symbol; afterwards on the configured interval.
 | `iv_spike` | ATM IV rising ≥10% vs the average of recent scans | Someone is bidding up vol *right now* |
 | `unusual_volume` | Contract volume on pace for ≥ 2× open interest (min 500 lots at day pace) | New positioning today, not closing of old positions |
 | `put_call_ratio` | P/C volume ratio > 2.0 or < 0.4 | One-sided directional flow |
-| `gamma_build` | Net gamma exposure up ≥25% scan-over-scan | Dealer hedging pressure building — amplifies or dampens moves |
+| `gamma_build` | Net gamma exposure up ≥25% scan-over-scan (same sign) | Dealer hedging pressure building — message says whether it stabilizes or destabilizes the tape |
+| `gamma_flip` | Net gamma exposure changed sign since last scan | Regime change: hedging switches between dampening moves (positive) and amplifying them (negative) |
 | `gamma_pin` | Peak gamma strike within 2% of spot | Pin/magnet risk into expiry |
 | `skew_shift` | OTM put IV minus OTM call IV moved ≥4 vol pts vs baseline | Crash protection getting bid, or upside being chased |
 
