@@ -10,6 +10,7 @@ biased: too strict at 10:00, too loose at 15:30. Detectors that use volume
 project it to full-day pace via ctx["pace_divisor"].
 """
 import json
+from datetime import datetime
 
 
 def _dollars(x: float) -> str:
@@ -22,6 +23,19 @@ def _dollars(x: float) -> str:
     else:
         body = f"${a:.0f}"
     return ("-" if x < 0 else "+") + body
+
+
+def _fmt_drivers(drivers: list[dict], limit: int = 2) -> str:
+    """'$100P Jun 20 (-$85.3K), $105P Jun 13 (-$22.1K)' from driver dicts."""
+    parts = []
+    for d in drivers[:limit]:
+        try:
+            exp = datetime.strptime(d["expiry"], "%Y-%m-%d").strftime("%b %d")
+        except (ValueError, KeyError):
+            exp = d.get("expiry", "?")
+        side = "C" if d["type"] == "call" else "P"
+        parts.append(f"${d['strike']:g}{side} {exp} ({_dollars(d['gex'])})")
+    return ", ".join(parts)
 
 
 def _baseline(history: list[dict], field: str) -> float | None:
@@ -182,34 +196,42 @@ def detect_pc_ratio(snap: dict, history: list[dict], th: dict, ctx: dict) -> lis
     return []
 
 
-def detect_gamma(snap: dict, history: list[dict], th: dict) -> list[dict]:
+def detect_gamma(snap: dict, history: list[dict], th: dict,
+                 ctx: dict | None = None) -> list[dict]:
     out = []
     gex = snap.get("net_gex")
     prev = history[0] if history else None
     prev_gex = prev.get("net_gex") if prev else None
-    if gex is not None and prev_gex:
+    drivers = (ctx or {}).get("gex_drivers") or []
+    # Below the materiality floor, dealer hedging is too small to move the
+    # tape — a sign flip between two ~zero values is not a regime change
+    material = (gex is not None and prev_gex
+                and max(abs(gex), abs(prev_gex)) >= th.get("gamma_min_gex", 5e6))
+    if material:
         flipped = (gex > 0) != (prev_gex > 0) and gex != 0
         swing = abs(gex - prev_gex) / abs(prev_gex)
         chg = (abs(gex) - abs(prev_gex)) / abs(prev_gex)
+        driver_note = f", driven by {_fmt_drivers(drivers)}" if drivers else ""
         if flipped and swing >= th["gamma_change_pct"]:
             # A sign change is a regime change — the most consequential gamma
             # event, and invisible to the |gex| growth check below
             if gex < 0:
                 msg = (f"Gamma regime flipped negative: net GEX {_dollars(prev_gex)} → "
-                       f"{_dollars(gex)}. Dealer hedging now amplifies moves — "
-                       f"expect faster, trendier price action and squeeze risk.")
+                       f"{_dollars(gex)}{driver_note}. Dealer hedging now amplifies "
+                       f"moves — expect faster, trendier price action and squeeze risk.")
                 sev = "critical"
             else:
                 msg = (f"Gamma regime flipped positive: net GEX {_dollars(prev_gex)} → "
-                       f"{_dollars(gex)}. Dealer hedging now dampens moves — "
-                       f"favors range-bound, pinned trading.")
+                       f"{_dollars(gex)}{driver_note}. Dealer hedging now dampens "
+                       f"moves — favors range-bound, pinned trading.")
                 sev = "warning"
             out.append({
                 "kind": "gamma_flip",
                 "severity": sev,
                 "message": msg,
                 "value": round(swing, 3),
-                "details": json.dumps({"net_gex": gex, "prev_gex": prev_gex}),
+                "details": json.dumps({"net_gex": gex, "prev_gex": prev_gex,
+                                       "drivers": drivers}),
             })
         elif chg >= th["gamma_change_pct"]:
             if gex > 0:
@@ -218,13 +240,15 @@ def detect_gamma(snap: dict, history: list[dict], th: dict) -> list[dict]:
             else:
                 flavor = ("destabilizing gamma — dealer hedging amplifies moves, "
                           "raising swing and squeeze risk")
+            led_note = f"; led by {_fmt_drivers(drivers)}" if drivers else ""
             out.append({
                 "kind": "gamma_build",
                 "severity": "warning",
                 "message": (f"Net GEX {_dollars(prev_gex)} → {_dollars(gex)} "
-                            f"(+{chg:.0%} since last scan): building {flavor}."),
+                            f"(+{chg:.0%} since last scan): building {flavor}{led_note}."),
                 "value": round(chg, 3),
-                "details": json.dumps({"net_gex": gex, "prev_gex": prev_gex}),
+                "details": json.dumps({"net_gex": gex, "prev_gex": prev_gex,
+                                       "drivers": drivers}),
             })
     peak, spot = snap.get("peak_gamma_strike"), snap.get("spot")
     if peak and spot:
@@ -274,6 +298,6 @@ def run_all(snap: dict, contracts: list[dict], history: list[dict], th: dict,
     signals += detect_iv_spike(snap, history, th)
     signals += detect_unusual_volume(snap, contracts, th, ctx)
     signals += detect_pc_ratio(snap, history, th, ctx)
-    signals += detect_gamma(snap, history, th)
+    signals += detect_gamma(snap, history, th, ctx)
     signals += detect_skew_shift(snap, history, th)
     return signals

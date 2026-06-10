@@ -49,13 +49,16 @@ def _skew(contracts: list[dict], spot: float) -> float | None:
     return otm_put["iv"] - otm_call["iv"]
 
 
-def _gamma_profile(contracts: list[dict], spot: float) -> tuple[float, float | None]:
+def _gamma_profile(contracts: list[dict], spot: float
+                   ) -> tuple[float, float | None, list[dict]]:
     """Naive dealer GEX: assume dealers are long calls / short puts.
 
-    Returns (net gamma exposure in $ per 1% move, strike with peak |gamma·OI|).
+    Returns (net gamma exposure in $ per 1% move, strike with peak |gamma·OI|,
+    top contracts on the net's side — the strikes driving the current regime).
     """
     net = 0.0
     by_strike: dict[float, float] = {}
+    rows: list[dict] = []
     for c in contracts:
         if not c["iv"] or not c["open_interest"]:
             continue
@@ -65,8 +68,12 @@ def _gamma_profile(contracts: list[dict], spot: float) -> tuple[float, float | N
         signed = notional if c["type"] == "call" else -notional
         net += signed
         by_strike[c["strike"]] = by_strike.get(c["strike"], 0.0) + abs(notional)
+        rows.append({"type": c["type"], "strike": c["strike"],
+                     "expiry": c["expiry"], "gex": round(signed)})
     peak = max(by_strike, key=by_strike.get) if by_strike else None
-    return net, peak
+    drivers = sorted((r for r in rows if (r["gex"] >= 0) == (net >= 0)),
+                     key=lambda r: abs(r["gex"]), reverse=True)[:5]
+    return net, peak, drivers
 
 
 def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
@@ -79,7 +86,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
 
     call_vol = sum(c["volume"] for c in contracts if c["type"] == "call")
     put_vol = sum(c["volume"] for c in contracts if c["type"] == "put")
-    net_gex, peak_strike = _gamma_profile(contracts, spot)
+    net_gex, peak_strike, gex_drivers = _gamma_profile(contracts, spot)
 
     snap = {
         "symbol": symbol,
@@ -105,6 +112,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         "elapsed_fraction": market_clock.elapsed_fraction(),
         "pace_divisor": market_clock.pace_divisor(),
         "minutes_since_open": market_clock.minutes_since_open(),
+        "gex_drivers": gex_drivers,
     }
     found = detectors.run_all(snap, contracts, history, cfg["thresholds"], ctx)
     emitted = []

@@ -112,13 +112,18 @@
         side it was already on. Building <em>positive</em> (stabilizing): dealer
         hedging leans harder against moves — expect tighter ranges and pinning.
         Building <em>negative</em> (destabilizing): hedging amplifies moves —
-        expect bigger swings. The message states which one it is.</dd>
+        expect bigger swings. The message states which one it is and names the
+        strikes driving the exposure. Only fires when GEX is big enough to
+        matter (default ≥ $5M per 1% move) — below that, dealer hedging is too
+        small to move the tape.</dd>
         <dt id="help-gamma_flip">Gamma flip</dt>
         <dd>Net gamma exposure changed <em>sign</em> since the previous scan —
         a regime change, the most consequential gamma event. Flipping negative
         (red): dealer hedging switches from cushioning moves to chasing them;
         faster, trendier, squeezier price action. Flipping positive: the tape
-        should calm down and get sticky around big strikes.</dd>
+        should calm down and get sticky around big strikes. Subject to the
+        same materiality floor as gamma build, and names the driver strikes
+        so the source can be checked on the chain.</dd>
         <dt id="help-gamma_pin">Gamma pin</dt>
         <dd>The peak gamma strike sits within 2% of the stock price — the
         setup for pinning, where hedging flows hold price near that strike

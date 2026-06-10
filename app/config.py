@@ -38,6 +38,9 @@ DEFAULTS = {
         "pc_min_total_volume": 1000,
         # Relative change in net gamma exposure vs previous snapshot
         "gamma_change_pct": 0.25,
+        # Flip/build signals need this much |GEX| ($ per 1% move) to matter;
+        # below it, dealer hedging is too small to move the tape
+        "gamma_min_gex": 5_000_000,
         # Strike with peak gamma must be within this % of spot to flag pin risk
         "gamma_pin_distance_pct": 0.02,
         # Change in put-call IV skew (vol points) vs recent average
