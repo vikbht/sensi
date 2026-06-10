@@ -1,4 +1,5 @@
 """Scan orchestration: fetch data, compute metrics, persist snapshot, run detectors."""
+import json
 import logging
 from datetime import date
 
@@ -160,7 +161,34 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
                          sig.get("value"), sig.get("details"))
         log.info("%s [%s] %s", symbol, sig["kind"], message)
         emitted.append(sig)
+    if emitted:
+        confluence = _check_confluence(symbol, cfg)
+        if confluence:
+            emitted.append(confluence)
     return emitted
+
+
+def _check_confluence(symbol: str, cfg: dict) -> dict | None:
+    """Several independent detectors agreeing beats any single alert.
+
+    Fires (with its own long cooldown) when enough distinct signal kinds
+    have hit one symbol inside the rolling window.
+    """
+    window_min = cfg["confluence_window_hours"] * 60
+    kinds = db.distinct_signal_kinds_since(symbol, window_min)
+    if len(kinds) < cfg["confluence_min_kinds"]:
+        return None
+    if db.signal_fired_recently(symbol, "confluence", cfg["confluence_cooldown_minutes"]):
+        return None
+    pretty = ", ".join(k.replace("_", " ") for k in kinds)
+    message = (f"Confluence: {len(kinds)} independent signal types inside "
+               f"{cfg['confluence_window_hours']}h — {pretty}. Multiple detectors "
+               f"agreeing is far stronger evidence than any single alert; "
+               f"this name deserves a close look.")
+    db.insert_signal(symbol, "confluence", "critical", message,
+                     float(len(kinds)), json.dumps({"kinds": kinds}))
+    log.info("%s [confluence] %s", symbol, message)
+    return {"kind": "confluence", "severity": "critical", "message": message}
 
 
 def scan_watchlist() -> dict:

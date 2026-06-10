@@ -45,7 +45,7 @@ async function refreshTable() {
       <td class="num ${m.spot == null ? 'stale' : ''}">${price}</td>
       <td class="num"><span class="${ivhv > 1.25 ? 'hot' : ''}">${ivhv ? ivhv.toFixed(2) : '—'}</span></td>
       <td class="num">${m.pc_ratio ?? '—'}</td>
-      <td class="num">${m.signals_24h ? `<span class="badge">${m.signals_24h}</span>` : ''}</td>
+      <td class="num">${m.confluence_24h ? '<span class="flame" title="Confluence in the last 24h">🔥</span>' : ''}${m.signals_24h ? `<span class="badge">${m.signals_24h}</span>` : ''}</td>
       <td><button class="remove" title="Remove ${m.symbol}">×</button></td>`;
     tr.querySelector('.remove').onclick = async (e) => {
       e.stopPropagation();

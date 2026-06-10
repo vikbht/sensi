@@ -49,6 +49,7 @@ a symbol; afterwards on the configured interval.
 | `gamma_flip` | Net GEX changed sign since last scan (≥ $5M floor) | Regime change: hedging switches between dampening moves (positive) and amplifying them (negative) |
 | `gamma_pin` | Peak gamma strike within 2% of spot | Pin/magnet risk into expiry |
 | `skew_shift` | OTM put IV minus OTM call IV moved ≥4 vol pts vs baseline | Crash protection getting bid, or upside being chased |
+| `confluence` | ≥3 distinct signal kinds on one symbol within 4h | Independent detectors agreeing — the strongest pattern here; flagged 🔥 in the watchlist |
 
 Signals carry **catalyst context**: earnings within 7 days appends
 "event premium likely", while IV signals with a known earnings date more

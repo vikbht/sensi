@@ -121,7 +121,10 @@ def latest_metrics() -> list[dict]:
                   s.call_volume, s.put_volume, s.pc_ratio, s.net_gex,
                   s.peak_gamma_strike, s.skew, s.scanned_at, s.next_earnings,
                   (SELECT COUNT(*) FROM signals sig WHERE sig.symbol = w.symbol
-                     AND sig.created_at >= datetime('now', '-1 day')) AS signals_24h
+                     AND sig.created_at >= datetime('now', '-1 day')) AS signals_24h,
+                  (SELECT COUNT(*) FROM signals sig WHERE sig.symbol = w.symbol
+                     AND sig.kind = 'confluence'
+                     AND sig.created_at >= datetime('now', '-1 day')) AS confluence_24h
            FROM watchlist w
            LEFT JOIN snapshots s ON s.id = (
                SELECT id FROM snapshots WHERE symbol = w.symbol
@@ -162,6 +165,17 @@ def purge_old(snapshot_days: int, signal_days: int) -> tuple[int, int]:
         (f"-{int(signal_days)} days",)).rowcount
     conn.commit()
     return snaps, sigs
+
+
+def distinct_signal_kinds_since(symbol: str, minutes: int) -> list[str]:
+    """Distinct non-confluence signal kinds for a symbol in the window."""
+    rows = get_conn().execute(
+        """SELECT DISTINCT kind FROM signals WHERE symbol = ?
+           AND kind != 'confluence' AND created_at >= datetime('now', ?)
+           ORDER BY kind""",
+        (symbol, f"-{int(minutes)} minutes"),
+    ).fetchall()
+    return [r["kind"] for r in rows]
 
 
 def signal_fired_recently(symbol: str, kind: str, cooldown_minutes: int) -> bool:

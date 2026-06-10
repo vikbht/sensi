@@ -55,6 +55,12 @@ DEFAULTS = {
     # IV signals with a KNOWN earnings date beyond this get the
     # "no obvious catalyst" tag (the interesting case)
     "no_catalyst_window_days": 14,
+    # Confluence: this many distinct signal kinds on one symbol within the
+    # window emits a critical meta-signal (own cooldown so it fires once
+    # per cluster, not once per scan)
+    "confluence_min_kinds": 3,
+    "confluence_window_hours": 4,
+    "confluence_cooldown_minutes": 240,
 }
 
 _lock = threading.Lock()
