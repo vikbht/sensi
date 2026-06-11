@@ -28,6 +28,20 @@ class YFinanceProvider(OptionsDataProvider):
         except Exception:
             return None  # unknown — caller must not claim "no catalyst"
 
+    def get_short_interest(self, symbol: str) -> dict | None:
+        try:
+            info = yf.Ticker(symbol).get_info()
+            pct = info.get("shortPercentOfFloat")
+            dtc = info.get("shortRatio")
+            if pct is None and dtc is None:
+                return None
+            return {
+                "pct_float": float(pct) if pct is not None else None,
+                "days_to_cover": float(dtc) if dtc is not None else None,
+            }
+        except Exception:
+            return None
+
     def get_option_chain(self, symbol: str, max_expirations: int,
                          min_days_to_expiry: int) -> list[dict]:
         t = yf.Ticker(symbol)

@@ -68,6 +68,11 @@ async function refreshTable() {
       const gex = m.net_gex != null
         ? paren('$' + Math.abs(Math.round(m.net_gex)).toLocaleString(), m.net_gex < 0)
         : '—';
+      let shortFloat = '—';
+      if (m.short_pct_float != null) {
+        shortFloat = (m.short_pct_float * 100).toFixed(1) + '%';
+        if (m.days_to_cover != null) shortFloat += ` (${m.days_to_cover.toFixed(1)}d cover)`;
+      }
       let earnings = '—';
       if (m.next_earnings) {
         const days = Math.round((new Date(m.next_earnings) - Date.now()) / 86400000);
@@ -83,6 +88,7 @@ async function refreshTable() {
         ${detailCell('Skew (p−c)', pct(m.skew))}
         ${detailCell('Net GEX /1%', gex)}
         ${detailCell('Earnings', earnings)}
+        ${detailCell('Short float', shortFloat)}
         ${detailCell('Scanned', m.scanned_at ? fmtTime(m.scanned_at) : 'pending')}
       </div></td>`;
       tbody.appendChild(dr);

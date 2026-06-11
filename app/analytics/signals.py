@@ -291,6 +291,96 @@ def detect_skew_shift(snap: dict, history: list[dict], th: dict) -> list[dict]:
     return []
 
 
+def detect_squeeze_setup(snap: dict, contracts: list[dict], history: list[dict],
+                         th: dict, ctx: dict) -> list[dict]:
+    """Composite: short-interest fuel (mandatory) + enough flow conditions.
+
+    Setups persist for days, so this kind carries a long cooldown upstream.
+    """
+    si = (ctx or {}).get("short_interest") or {}
+    pct = si.get("pct_float")
+    if not pct or pct < th["squeeze_min_short_float"]:
+        return []
+
+    conditions = []
+    pc = snap.get("pc_ratio")
+    if pc is not None and pc <= th["pc_ratio_low"] * 1.25:
+        conditions.append(f"calls dominating flow (P/C {pc:.2f})")
+
+    spot = snap.get("spot")
+    pace = (ctx or {}).get("pace_divisor", 1.0)
+    hot_calls = []
+    for c in contracts:
+        vol, oi = c.get("volume") or 0, c.get("open_interest") or 0
+        if (c["type"] == "call" and spot and c["strike"] > spot
+                and c["dte"] <= 14 and vol >= th["uoa_min_volume"] * pace
+                and oi > 0 and (vol / pace) / oi >= th["uoa_vol_oi_ratio"]):
+            hot_calls.append(c)
+    if hot_calls:
+        lead = max(hot_calls, key=lambda c: (c["volume"] / pace) / c["open_interest"])
+        conditions.append(
+            f"fresh OTM call buying (${lead['strike']:g}C {lead['expiry']}, "
+            f"{lead['volume']:,} traded vs {lead['open_interest']:,} OI)")
+
+    skew = snap.get("skew")
+    # Strictly negative beyond noise: exactly-zero skew is usually paired
+    # placeholder quotes, not a real inversion
+    if skew is not None and skew <= -0.01:
+        conditions.append(f"skew inverted ({skew * 100:+.1f} pts, calls over puts)")
+
+    day_chg = None
+    if spot and snap.get("prev_close"):
+        day_chg = (spot - snap["prev_close"]) / snap["prev_close"]
+    iv, base_iv = snap.get("atm_iv"), _baseline(history, "atm_iv")
+    if (day_chg is not None and day_chg >= 0.02
+            and iv and base_iv and iv > base_iv):
+        conditions.append(f"price {day_chg:+.1%} with IV rising")
+
+    if len(conditions) < th["squeeze_min_conditions"]:
+        return []
+
+    fuel = f"{pct:.0%} of float short"
+    if si.get("days_to_cover"):
+        fuel += f", {si['days_to_cover']:.1f} days to cover"
+    gex = snap.get("net_gex")
+    caveat = ""
+    if gex and gex > 0:
+        caveat = (" Naive GEX reads positive here, but in squeeze setups dealers "
+                  "are likely short these calls — treat the dampening read as suspect.")
+    return [{
+        "kind": "squeeze_setup",
+        "severity": "critical",
+        "message": (f"Squeeze setup: {fuel}; " + "; ".join(conditions)
+                    + f". Short-cover and dealer-hedging feedback loops both "
+                      f"point the same way if this runs.{caveat}"),
+        "value": float(len(conditions)),
+        "details": json.dumps({"short_interest": si, "conditions": conditions}),
+    }]
+
+
+def detect_vol_compression(snap: dict, th: dict) -> list[dict]:
+    """Coiled spring: realized vol collapsing and options not pricing expansion."""
+    hv10, hv20, iv = snap.get("hv10"), snap.get("hv20"), snap.get("atm_iv")
+    if not hv10 or not hv20 or hv20 <= 0:
+        return []
+    ratio = hv10 / hv20
+    if ratio > th["vol_compression_ratio"]:
+        return []
+    if iv and iv / hv20 > th["vol_compression_max_ivhv"]:
+        return []
+    iv_note = f" and IV isn't pricing expansion ({iv / hv20:.2f}x 20d HV)" if iv else ""
+    return [{
+        "kind": "vol_compression",
+        "severity": "info",
+        "message": (f"Volatility compressing: 10d HV {hv10:.1%} is only "
+                    f"{ratio:.2f}x the 20d {hv20:.1%}{iv_note} — coiled-spring "
+                    f"setup; breaks from compression tend to be violent, in "
+                    f"either direction"),
+        "value": round(ratio, 3),
+        "details": json.dumps({"hv10": hv10, "hv20": hv20, "atm_iv": iv}),
+    }]
+
+
 def run_all(snap: dict, contracts: list[dict], history: list[dict], th: dict,
             ctx: dict) -> list[dict]:
     signals = []
@@ -300,4 +390,6 @@ def run_all(snap: dict, contracts: list[dict], history: list[dict], th: dict,
     signals += detect_pc_ratio(snap, history, th, ctx)
     signals += detect_gamma(snap, history, th, ctx)
     signals += detect_skew_shift(snap, history, th)
+    signals += detect_squeeze_setup(snap, contracts, history, th, ctx)
+    signals += detect_vol_compression(snap, th)
     return signals

@@ -137,6 +137,21 @@
         — it's what flags names like "inverted skew + heavy call volume +
         unusual contract activity" as one story instead of three alerts.
         Names with a confluence in the last 24h get a 🔥 in the watchlist.</dd>
+        <dt id="help-squeeze_setup">Squeeze setup</dt>
+        <dd>The preconditions for a short/gamma squeeze lining up: heavy short
+        interest (≥10% of float — the fuel, always required) plus at least
+        three of: call-dominated flow, fresh near-dated OTM call buying,
+        inverted skew, and price rising with IV rising. If it runs, short
+        covering and dealer hedging push the same direction. Caution: when
+        net GEX reads positive on one of these, the dealer-positioning
+        assumption is likely backwards — speculators bought those calls, so
+        dealers are short them. Short-interest data is FINRA bi-monthly,
+        up to ~2 weeks stale.</dd>
+        <dt id="help-vol_compression">Vol compression</dt>
+        <dd>The "coiled spring": 10-day realized vol has collapsed well below
+        the 20-day while options aren't pricing an expansion. Quiet, tight
+        ranges tend to resolve violently — in either direction. This is a
+        setup flag, not a directional call.</dd>
         <dt id="help-daily_wrap">Daily wrap</dt>
         <dd>An end-of-day summary card (4:15 PM ET) with one row per name:
         day move, ATM IV with the day's change in vol points, and the most

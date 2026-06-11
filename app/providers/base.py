@@ -13,6 +13,12 @@ class OptionsDataProvider(ABC):
         Optional — providers without calendar data can keep the default."""
         return None
 
+    def get_short_interest(self, symbol: str) -> dict | None:
+        """{'pct_float': 0.14, 'days_to_cover': 6.1} or None if unknown.
+        Optional — FINRA data is bi-monthly, so staleness up to ~2 weeks
+        is expected from any free source."""
+        return None
+
     @abstractmethod
     def get_spot_and_history(self, symbol: str) -> tuple[float, pd.Series]:
         """Return (last price, daily close series covering >= 60 sessions)."""

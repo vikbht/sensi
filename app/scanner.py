@@ -15,8 +15,15 @@ provider = YFinanceProvider()
 
 CONTRACT_MULTIPLIER = 100
 
-# Earnings dates barely move — one provider lookup per symbol per day
+# Earnings dates and short interest barely move — one lookup per symbol per day
 _earnings_cache: dict[str, tuple[date, date | None]] = {}
+_short_cache: dict[str, tuple[date, dict | None]] = {}
+
+# Setup-style signals persist for days, so they get longer cooldowns
+KIND_COOLDOWN_KEYS = {
+    "squeeze_setup": "squeeze_cooldown_minutes",
+    "vol_compression": "vol_compression_cooldown_minutes",
+}
 
 
 def _next_earnings(symbol: str) -> date | None:
@@ -27,6 +34,16 @@ def _next_earnings(symbol: str) -> date | None:
     earnings = provider.get_next_earnings(symbol)
     _earnings_cache[symbol] = (today, earnings)
     return earnings
+
+
+def _short_interest(symbol: str) -> dict | None:
+    today = date.today()
+    hit = _short_cache.get(symbol)
+    if hit and hit[0] == today:
+        return hit[1]
+    si = provider.get_short_interest(symbol)
+    _short_cache[symbol] = (today, si)
+    return si
 
 
 def _prev_close(closes) -> float | None:
@@ -133,6 +150,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
     net_gex, peak_strike, gex_drivers = _gamma_profile(contracts, spot)
     earnings = _next_earnings(symbol)
     days_to_earnings = (earnings - date.today()).days if earnings else None
+    short_interest = _short_interest(symbol) or {}
 
     snap = {
         "symbol": symbol,
@@ -148,6 +166,8 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         "skew": _skew(contracts, spot),
         "next_earnings": earnings.isoformat() if earnings else None,
         "prev_close": _prev_close(closes),
+        "short_pct_float": short_interest.get("pct_float"),
+        "days_to_cover": short_interest.get("days_to_cover"),
     }
 
     # Baseline = snapshots taken BEFORE this scan, scoped to today's session so
@@ -161,12 +181,15 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         "pace_divisor": market_clock.pace_divisor(),
         "minutes_since_open": market_clock.minutes_since_open(),
         "gex_drivers": gex_drivers,
+        "short_interest": short_interest,
     }
     found = detectors.run_all(snap, contracts, history, cfg["thresholds"], ctx)
     emitted = []
-    cooldown = cfg.get("signal_cooldown_minutes", 45)
     for sig in found:
-        # Don't re-alert the same condition on every scan tick
+        # Don't re-alert the same condition on every scan tick; setup-style
+        # kinds use their own (longer) windows
+        cooldown = cfg.get(KIND_COOLDOWN_KEYS.get(sig["kind"], ""),
+                           cfg.get("signal_cooldown_minutes", 45))
         if db.signal_fired_recently(symbol, sig["kind"], cooldown):
             continue
         message = sig["message"] + _catalyst_note(days_to_earnings, sig["kind"], cfg)

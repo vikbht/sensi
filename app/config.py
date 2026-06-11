@@ -45,6 +45,15 @@ DEFAULTS = {
         "gamma_pin_distance_pct": 0.02,
         # Change in put-call IV skew (vol points) vs recent average
         "skew_shift_pts": 0.04,
+        # Squeeze setup: short float is the mandatory fuel, then this many
+        # flow conditions (call-heavy P/C, fresh OTM call buying, inverted
+        # skew, price+IV rising) must also be true
+        "squeeze_min_short_float": 0.10,
+        "squeeze_min_conditions": 3,
+        # Vol compression: 10d HV at or below this fraction of 20d HV,
+        # with IV/HV no higher than the max (otherwise expansion is priced)
+        "vol_compression_ratio": 0.6,
+        "vol_compression_max_ivhv": 1.1,
     },
     # How many recent snapshots form the comparison baseline
     "baseline_snapshots": 6,
@@ -61,6 +70,9 @@ DEFAULTS = {
     "confluence_min_kinds": 3,
     "confluence_window_hours": 4,
     "confluence_cooldown_minutes": 240,
+    # Setup-style signals persist for days; don't re-alert every 45 min
+    "squeeze_cooldown_minutes": 240,
+    "vol_compression_cooldown_minutes": 360,
 }
 
 _lock = threading.Lock()
