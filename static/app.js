@@ -49,7 +49,7 @@ async function refreshTable() {
     tr.innerHTML = `
       <td class="sym">${m.symbol}</td>
       <td class="num ${m.spot == null ? 'stale' : ''}">${price}</td>
-      <td class="num"><span class="${ivhv > 1.25 ? 'hot' : ''}">${ivhv ? ivhv.toFixed(2) : '—'}</span></td>
+      <td class="num"><span class="${ivhv > 1.25 ? 'hot' : ''}">${ivhv ? ivhv.toFixed(2) : '—'}</span>${m.atm_dte != null ? ` <span class="dte" title="Horizon of the IV reading: nearest expiry">${m.atm_dte}d</span>` : ''}</td>
       <td class="num">${m.pc_ratio ?? '—'}</td>
       <td class="num">${m.confluence_24h ? '<span class="flame" title="Confluence in the last 24h">🔥</span>' : ''}${m.signals_24h ? `<span class="badge">${m.signals_24h}</span>` : ''}</td>
       <td><button class="remove" title="Remove ${m.symbol}">×</button></td>`;
@@ -80,7 +80,7 @@ async function refreshTable() {
                    (days >= 0 ? ` (${days}d)` : '');
       }
       dr.innerHTML = `<td colspan="6"><div class="detail-grid">
-        ${detailCell('ATM IV', pct(m.atm_iv))}
+        ${detailCell('ATM IV', pct(m.atm_iv) + (m.atm_dte != null ? ` · ${m.atm_dte}d` : ''))}
         ${detailCell('HV 20d', pct(m.hv20))}
         ${detailCell('Call vol', num(m.call_volume))}
         ${detailCell('Put vol', num(m.put_volume))}

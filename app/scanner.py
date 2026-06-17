@@ -90,6 +90,12 @@ def _atm_iv(contracts: list[dict], spot: float) -> float | None:
     return sum(ivs) / len(ivs) if ivs else None
 
 
+def _nearest_dte(contracts: list[dict]) -> int | None:
+    """DTE of the nearest picked expiry — the horizon ATM IV and skew measure."""
+    dtes = [c["dte"] for c in contracts if c.get("dte") is not None]
+    return min(dtes) if dtes else None
+
+
 def _skew(contracts: list[dict], spot: float) -> float | None:
     """OTM put IV minus OTM call IV (~5% out), nearest picked expiry.
 
@@ -164,6 +170,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         "net_gex": net_gex,
         "peak_gamma_strike": peak_strike,
         "skew": _skew(contracts, spot),
+        "atm_dte": _nearest_dte(contracts),
         "next_earnings": earnings.isoformat() if earnings else None,
         "prev_close": _prev_close(closes),
         "short_pct_float": short_interest.get("pct_float"),

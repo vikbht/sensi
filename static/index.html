@@ -39,7 +39,11 @@
         actually been moving. Above ~1.25 (highlighted), options are pricing in
         more movement than the stock has delivered — a catalyst is expected, or
         premium is rich. Well below 1.0, optionality is cheap relative to
-        realized movement.</dd>
+        realized movement. The small <span class="dte" style="color:var(--muted)">Nd</span>
+        is the horizon: the days to the nearest expiry this IV is read from.
+        It varies by ticker (a few days for daily-listing ETFs, weeks for
+        single names), so compare IV/HV across names with the horizons in
+        mind.</dd>
         <dt>P/C</dt>
         <dd>Today's put volume ÷ call volume across the scanned expirations.
         Balanced names sit roughly 0.5–1.2. High (≥2) means heavy put activity
