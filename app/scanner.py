@@ -110,9 +110,17 @@ def _skew(contracts: list[dict], spot: float) -> float | None:
              if c["expiry"] == nearest_exp and c["type"] == "call" and c["iv"]]
     if not puts or not calls:
         return None
-    put_target, call_target = spot * 0.95, spot * 1.05
-    otm_put = min(puts, key=lambda c: abs(c["strike"] - put_target))
-    otm_call = min(calls, key=lambda c: abs(c["strike"] - call_target))
+
+    def pick(cands: list[dict], target: float) -> dict:
+        # Prefer strikes with a live two-sided quote — a stale single strike
+        # is what makes raw skew whipsaw — but fall back to nearest-by-strike
+        # when nothing is live (after hours, illiquid names)
+        live = [c for c in cands if c.get("has_quote", True)]
+        pool = live or cands
+        return min(pool, key=lambda c: abs(c["strike"] - target))
+
+    otm_put = pick(puts, spot * 0.95)
+    otm_call = pick(calls, spot * 1.05)
     return otm_put["iv"] - otm_call["iv"]
 
 
