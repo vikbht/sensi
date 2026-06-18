@@ -9,6 +9,10 @@
 <body>
 <header>
   <h1>Options Sensi<span class="dot">.</span></h1>
+  <div class="view-toggle">
+    <button id="view-dashboard" class="seg active">Dashboard</button>
+    <button id="view-performance" class="seg">Performance</button>
+  </div>
   <div class="status-bar">
     <span id="instance-warn" class="pill warn hidden" title="Another running instance is the active scanner. Stop the other one (or this one) to avoid conflicting data.">⚠ passive instance</span>
     <span id="scan-status" class="pill">idle</span>
@@ -197,7 +201,7 @@
   </div>
 </div>
 
-<main>
+<main id="dashboard-view">
   <aside class="panel side">
     <h2>Watchlist</h2>
     <form id="add-form">
@@ -252,6 +256,45 @@
     </div>
   </section>
 </main>
+
+<section id="performance-view" class="hidden">
+  <div class="panel">
+    <div class="perf-head">
+      <h2>Signal performance</h2>
+      <span class="perf-sub">trailing window · forward move vs each name's baseline</span>
+      <div class="perf-tabs">
+        <button id="tab-signal" class="seg active">By signal</button>
+        <button id="tab-name" class="seg">By name</button>
+      </div>
+    </div>
+
+    <div id="perf-signal">
+      <table class="perf-table">
+        <thead><tr>
+          <th>Signal</th><th>Measures</th><th class="num">N</th>
+          <th class="num">+1d edge</th><th class="num">+5d edge</th>
+          <th class="num">Hit</th><th>Verdict</th>
+        </tr></thead>
+        <tbody id="perf-signal-body"></tbody>
+      </table>
+    </div>
+
+    <div id="perf-name" class="hidden">
+      <table class="perf-table">
+        <thead><tr>
+          <th>Name</th><th class="num">Fires</th>
+          <th class="num" id="th-name-move">move vs base</th><th class="num">Hit</th>
+          <th>Best signal</th><th>Verdict</th>
+        </tr></thead>
+        <tbody id="perf-name-body"></tbody>
+      </table>
+      <div class="perf-heat-label">Where edge concentrates — name × signal (green = beat its baseline here)</div>
+      <div id="perf-heatmap"></div>
+    </div>
+
+    <p id="perf-note" class="perf-note"></p>
+  </div>
+</section>
 
 <script src="app.js"></script>
 </body>

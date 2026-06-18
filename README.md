@@ -43,6 +43,14 @@ a symbol; afterwards on the configured interval.
   plain English, including how to read skew, net GEX, and pinning.
 - **Settings** — collapsible panel for the scan interval and the most-used
   thresholds; the header shows market open/closed and last/next scan times.
+- **Performance view** — a Dashboard / Performance toggle in the header opens
+  signal outcome tracking: **By signal** grades each detector by its forward
+  move vs a baseline (trust / promising / weak / noise / collecting), scored
+  by flavor — direction, magnitude, or stillness; **By name** shows which
+  tickers produce predictive signals plus a name × signal edge heatmap. Each
+  fired signal is stamped with its +1d / +5d return by a daily job; outcomes
+  live in their own table (longer retention than the 5-day feed) so +5d can
+  mature. Early verdicts lean on +1d and upgrade to +5d as data accrues.
 
 ## Implemented signals
 

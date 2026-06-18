@@ -1,9 +1,11 @@
 """Scan orchestration: fetch data, compute metrics, persist snapshot, run detectors."""
 import json
 import logging
-from datetime import date
+from collections import defaultdict
+from datetime import date, datetime, timezone
 
 from . import config, db, market_clock
+from .analytics import outcomes as outcomes_mod
 from .analytics import signals as detectors
 from .analytics.black_scholes import gamma as bs_gamma
 from .analytics.historical_vol import close_to_close_hv
@@ -210,6 +212,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         message = sig["message"] + _catalyst_note(days_to_earnings, sig["kind"], cfg)
         db.insert_signal(symbol, sig["kind"], sig["severity"], message,
                          sig.get("value"), sig.get("details"))
+        db.insert_outcome(symbol, sig["kind"], sig["severity"], sig.get("dir", 0))
         log.info("%s [%s] %s", symbol, sig["kind"], message)
         emitted.append(sig)
     if emitted:
@@ -318,8 +321,53 @@ def _check_confluence(symbol: str, cfg: dict) -> dict | None:
                f"this name deserves a close look.")
     db.insert_signal(symbol, "confluence", "critical", message,
                      float(len(kinds)), json.dumps({"kinds": kinds}))
+    db.insert_outcome(symbol, "confluence", "critical", 0)
     log.info("%s [confluence] %s", symbol, message)
     return {"kind": "confluence", "severity": "critical", "message": message}
+
+
+def _et_date(created_at: str) -> date | None:
+    """An outcome row's UTC timestamp -> the ET calendar date it fired on."""
+    try:
+        dt = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        return dt.astimezone(market_clock.ET).date()
+    except (ValueError, TypeError):
+        return None
+
+
+def compute_outcomes() -> dict:
+    """Fill matured forward returns on outcome rows and refresh per-name
+    baselines. Cheap: one daily-close fetch per symbol, reused for both.
+    Runs daily after the close (and on demand)."""
+    cfg = config.load()
+    db.backfill_outcomes_from_signals()  # one-time seed; no-op once populated
+    pending = db.pending_outcomes()
+    by_sym: dict[str, list] = defaultdict(list)
+    for o in pending:
+        by_sym[o["symbol"]].append(o)
+
+    window = cfg["baseline_window_days"]
+    symbols = set(by_sym) | set(db.list_watchlist())
+    filled = 0
+    for sym in symbols:
+        try:
+            _, closes = provider.get_spot_and_history(sym)
+        except Exception:
+            continue
+        db.upsert_baseline(sym, *outcomes_mod.compute_baseline(closes, window))
+        for o in by_sym.get(sym, []):
+            entry = _et_date(o["created_at"])
+            if entry is None:
+                continue
+            fr = outcomes_mod.forward_returns(closes, entry, (1, 5))
+            r1, r5 = fr[1], fr[5]
+            if r1 is not None or r5 is not None:
+                db.update_outcome(o["id"], r1, r5, r1 is not None, r5 is not None)
+                filled += 1
+    removed = db.purge_outcomes(cfg["outcome_retention_days"])
+    log.info("outcomes: filled %d, purged %d, baselines for %d symbols",
+             filled, removed, len(symbols))
+    return {"filled": filled, "purged": removed}
 
 
 def scan_watchlist() -> dict:

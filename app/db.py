@@ -47,6 +47,34 @@ CREATE TABLE IF NOT EXISTS scan_lease (
     instance_id TEXT NOT NULL,
     heartbeat TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Outcome tracking lives apart from the lean 5-day signal feed so +5d
+-- returns can mature and a sample can accumulate.
+CREATE TABLE IF NOT EXISTS outcomes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    severity TEXT,
+    dir INTEGER NOT NULL DEFAULT 0,   -- +1 bullish, -1 bearish, 0 magnitude
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    ret_1d REAL,
+    ret_5d REAL,
+    done_1d INTEGER NOT NULL DEFAULT 0,
+    done_5d INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_outcomes_kind ON outcomes(kind);
+CREATE INDEX IF NOT EXISTS idx_outcomes_symbol ON outcomes(symbol);
+CREATE INDEX IF NOT EXISTS idx_outcomes_pending ON outcomes(done_5d, created_at);
+
+-- Per-symbol "what this name does anyway" — the edge baseline.
+CREATE TABLE IF NOT EXISTS baselines (
+    symbol TEXT PRIMARY KEY,
+    base_abs_1d REAL,   -- avg |1d return|
+    base_abs_5d REAL,
+    base_ret_1d REAL,   -- avg signed 1d return (drift)
+    base_ret_5d REAL,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
 """
 
 
@@ -247,6 +275,86 @@ def lease_info() -> dict | None:
                   (julianday('now') - julianday(heartbeat)) * 86400 AS age_seconds
            FROM scan_lease WHERE id = 1""").fetchone()
     return dict(row) if row else None
+
+
+# --- outcome tracking ---
+
+def insert_outcome(symbol: str, kind: str, severity: str, dir: int = 0,
+                   created_at: str | None = None) -> None:
+    conn = get_conn()
+    if created_at:
+        conn.execute(
+            "INSERT INTO outcomes(symbol, kind, severity, dir, created_at) VALUES (?,?,?,?,?)",
+            (symbol, kind, severity, dir, created_at))
+    else:
+        conn.execute(
+            "INSERT INTO outcomes(symbol, kind, severity, dir) VALUES (?,?,?,?)",
+            (symbol, kind, severity, dir))
+    conn.commit()
+
+
+def backfill_outcomes_from_signals() -> int:
+    """One-time seed from the existing signal feed so the view isn't empty on
+    first run. No-op once outcomes already holds rows."""
+    conn = get_conn()
+    if conn.execute("SELECT 1 FROM outcomes LIMIT 1").fetchone():
+        return 0
+    n = conn.execute(
+        """INSERT INTO outcomes(symbol, kind, severity, created_at)
+           SELECT symbol, kind, severity, created_at FROM signals
+           WHERE kind != 'daily_wrap'""").rowcount
+    conn.commit()
+    return n
+
+
+def pending_outcomes() -> list[dict]:
+    """Outcome rows still missing a +5d return (the longest horizon)."""
+    rows = get_conn().execute(
+        "SELECT * FROM outcomes WHERE done_5d = 0 ORDER BY created_at").fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_outcome(outcome_id: int, ret_1d, ret_5d, done_1d: bool, done_5d: bool) -> None:
+    conn = get_conn()
+    conn.execute(
+        """UPDATE outcomes SET ret_1d = ?, ret_5d = ?, done_1d = ?, done_5d = ?
+           WHERE id = ?""",
+        (ret_1d, ret_5d, int(done_1d), int(done_5d), outcome_id))
+    conn.commit()
+
+
+def all_outcomes() -> list[dict]:
+    rows = get_conn().execute("SELECT * FROM outcomes").fetchall()
+    return [dict(r) for r in rows]
+
+
+def upsert_baseline(symbol: str, base_abs_1d, base_abs_5d,
+                    base_ret_1d, base_ret_5d) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO baselines(symbol, base_abs_1d, base_abs_5d, base_ret_1d,
+               base_ret_5d, updated_at)
+           VALUES (?,?,?,?,?, datetime('now'))
+           ON CONFLICT(symbol) DO UPDATE SET
+               base_abs_1d=excluded.base_abs_1d, base_abs_5d=excluded.base_abs_5d,
+               base_ret_1d=excluded.base_ret_1d, base_ret_5d=excluded.base_ret_5d,
+               updated_at=excluded.updated_at""",
+        (symbol, base_abs_1d, base_abs_5d, base_ret_1d, base_ret_5d))
+    conn.commit()
+
+
+def get_baselines() -> dict[str, dict]:
+    rows = get_conn().execute("SELECT * FROM baselines").fetchall()
+    return {r["symbol"]: dict(r) for r in rows}
+
+
+def purge_outcomes(days: int) -> int:
+    conn = get_conn()
+    n = conn.execute(
+        "DELETE FROM outcomes WHERE created_at < datetime('now', ?)",
+        (f"-{int(days)} days",)).rowcount
+    conn.commit()
+    return n
 
 
 def last_snapshot_before(symbol: str, before_utc: str) -> dict | None:

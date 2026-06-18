@@ -304,6 +304,123 @@ settingsBox.addEventListener('toggle', () => {
   localStorage.setItem('sensi-settings-open', settingsBox.open ? '1' : '0');
 });
 
+// ---- performance view ----
+
+const pctSigned = (v, digits = 1) =>
+  v == null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(digits)}%`;
+
+const MEASURES = { direction: '↑ dir', magnitude: '⇕ size', stillness: '≈ still' };
+
+function edgeCell(v, good) {
+  // green when the detector was right, red when wrong, muted when neutral/none
+  if (v == null) return '<td class="num muted">—</td>';
+  const cls = good == null ? 'muted' : good > 0.0005 ? 'pos' : good < -0.0005 ? 'neg' : 'muted';
+  return `<td class="num ${cls}">${pctSigned(v)}</td>`;
+}
+
+function renderSignalTab(d) {
+  const body = $('#perf-signal-body');
+  body.innerHTML = '';
+  for (const s of d.by_signal) {
+    const tr = document.createElement('tr');
+    const hit = s.hit == null ? '—' : `${Math.round(s.hit * 100)}%`;
+    tr.innerHTML =
+      `<td class="kind">${s.kind.replaceAll('_', ' ')}</td>` +
+      `<td class="measures">${MEASURES[s.type] || s.type}</td>` +
+      `<td class="num">${s.n}</td>` +
+      edgeCell(s.edge_1d, s.type === 'stillness' ? -s.edge_1d : s.edge_1d) +
+      edgeCell(s.edge_5d, s.good_5d) +
+      `<td class="num muted">${hit}</td>` +
+      `<td><span class="verdict ${s.verdict}">${s.verdict}</span></td>`;
+    body.appendChild(tr);
+  }
+}
+
+function renderNameTab(d) {
+  $('#th-name-move').textContent = `+${d.horizon}d move vs base`;
+  const body = $('#perf-name-body');
+  body.innerHTML = '';
+  for (const n of d.by_name) {
+    const move = n.mean_abs == null ? '—'
+      : `${(n.mean_abs * 100).toFixed(1)}% <span class="muted">vs ${n.base_abs != null ? (n.base_abs * 100).toFixed(1) + '%' : '—'}</span>`;
+    const good = (n.mean_abs != null && n.base_abs != null) ? n.mean_abs - n.base_abs : null;
+    const moveCls = good == null ? 'muted' : good > 0 ? 'pos' : 'neg';
+    const hit = n.hit == null ? '—' : `${Math.round(n.hit * 100)}%`;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="kind">${n.symbol}</td>` +
+      `<td class="num">${n.fires}</td>` +
+      `<td class="num ${moveCls}">${move}</td>` +
+      `<td class="num muted">${hit}</td>` +
+      `<td class="muted">${n.top_signal ? n.top_signal.replaceAll('_', ' ') : '—'}</td>` +
+      `<td><span class="verdict ${n.verdict}">${n.verdict}</span></td>`;
+    body.appendChild(tr);
+  }
+  renderHeatmap(d.heatmap);
+}
+
+function heatClass(cell) {
+  if (!cell || cell.n < 3 || cell.good == null) return 'na';
+  if (cell.good >= 0.02) return 'g3';
+  if (cell.good >= 0.003) return 'g1';
+  if (cell.good <= -0.003) return 'bad';
+  return 'n0';
+}
+
+function renderHeatmap(heat) {
+  const kinds = heat.kinds.slice(0, 7);
+  const grid = $('#perf-heatmap');
+  grid.className = 'heat-grid';
+  grid.style.gridTemplateColumns = `72px repeat(${kinds.length}, 1fr)`;
+  let html = '<span></span>' +
+    kinds.map(k => `<span class="hh">${k.split('_').map(w => w.slice(0, 4)).join('')}</span>`).join('');
+  for (const row of heat.rows) {
+    html += `<span class="hname">${row.symbol}</span>`;
+    for (const k of kinds) {
+      const c = row.cells[k];
+      const cls = heatClass(c);
+      const txt = cls === 'na' ? '·' : pctSigned(c.edge);
+      html += `<span class="heat-cell ${cls}">${txt}</span>`;
+    }
+  }
+  grid.innerHTML = html;
+}
+
+async function refreshPerformance() {
+  try {
+    const d = await api('/api/outcomes');
+    renderSignalTab(d);
+    renderNameTab(d);
+    const ready = d.by_signal.some(s => s.verdict !== 'collecting');
+    $('#perf-note').innerHTML =
+      `measures: ↑ dir = moved the predicted way · ⇕ size = a move happened either way · ≈ still = stayed calmer than usual. ` +
+      `edge = signal outcome minus the same name's baseline. Verdicts use +5d once ${d.min_samples}+ matured samples exist, falling back to +1d. ` +
+      (ready ? '' : '+5d returns are still maturing — early verdicts lean on +1d.');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// view + tab switching
+function showView(perf) {
+  $('#dashboard-view').classList.toggle('hidden', perf);
+  $('#performance-view').classList.toggle('hidden', !perf);
+  $('#view-dashboard').classList.toggle('active', !perf);
+  $('#view-performance').classList.toggle('active', perf);
+  if (perf) refreshPerformance();
+}
+$('#view-dashboard').onclick = () => showView(false);
+$('#view-performance').onclick = () => showView(true);
+
+function showPerfTab(name) {
+  $('#perf-signal').classList.toggle('hidden', name !== 'signal');
+  $('#perf-name').classList.toggle('hidden', name !== 'name');
+  $('#tab-signal').classList.toggle('active', name === 'signal');
+  $('#tab-name').classList.toggle('active', name === 'name');
+}
+$('#tab-signal').onclick = () => showPerfTab('signal');
+$('#tab-name').onclick = () => showPerfTab('name');
+
 // ---- main loop ----
 
 async function refreshAll() {

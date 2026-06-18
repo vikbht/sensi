@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config, db, market_clock, scanner
+from .analytics import outcomes as outcomes_mod
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -82,8 +83,13 @@ async def lifespan(app: FastAPI):
                       day_of_week="mon-fri", hour=16, minute=15,
                       timezone=market_clock.ET, id="daily_wrap",
                       replace_existing=True)
+    scheduler.add_job(scanner.compute_outcomes, "cron",
+                      day_of_week="mon-fri", hour=16, minute=30,
+                      timezone=market_clock.ET, id="compute_outcomes",
+                      replace_existing=True)
     scheduler.start()
     threading.Thread(target=_run_scan, daemon=True).start()  # scan on boot
+    threading.Thread(target=scanner.compute_outcomes, daemon=True).start()  # seed/mature
     yield
     scheduler.shutdown(wait=False)
 
@@ -153,6 +159,19 @@ def trigger_scan():
 def trigger_wrap():
     threading.Thread(target=scanner.generate_daily_wrap,
                      kwargs={"force": True}, daemon=True).start()
+    return {"started": True}
+
+
+@app.get("/api/outcomes")
+def get_outcomes():
+    cfg = config.load()
+    return outcomes_mod.aggregate(db.all_outcomes(), db.get_baselines(),
+                                  cfg["outcome_min_samples"])
+
+
+@app.post("/api/outcomes/compute")
+def trigger_outcomes():
+    threading.Thread(target=scanner.compute_outcomes, daemon=True).start()
     return {"started": True}
 
 

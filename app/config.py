@@ -73,6 +73,13 @@ DEFAULTS = {
     # Setup-style signals persist for days; don't re-alert every 45 min
     "squeeze_cooldown_minutes": 240,
     "vol_compression_cooldown_minutes": 360,
+    # Outcome tracking: keep outcome rows long enough to mature +5d and
+    # accumulate a sample (independent of the lean 5-day signal feed)
+    "outcome_retention_days": 120,
+    # Trailing trading days used to compute each name's baseline forward move
+    "baseline_window_days": 60,
+    # Min samples before an outcome verdict is shown rather than "collecting"
+    "outcome_min_samples": 10,
 }
 
 _lock = threading.Lock()

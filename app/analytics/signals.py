@@ -179,6 +179,7 @@ def detect_pc_ratio(snap: dict, history: list[dict], th: dict, ctx: dict) -> lis
                         f"one-sided downside flow: protection being bought "
                         f"or bearish bets building"),
             "value": pc,
+            "dir": -1,
             "details": None,
         }]
     if pc <= th["pc_ratio_low"]:
@@ -191,6 +192,7 @@ def detect_pc_ratio(snap: dict, history: list[dict], th: dict, ctx: dict) -> lis
                         f"one-sided upside flow: speculative call buying "
                         f"dominating the tape"),
             "value": pc,
+            "dir": 1,
             "details": None,
         }]
     return []
@@ -286,6 +288,7 @@ def detect_skew_shift(snap: dict, history: list[dict], th: dict) -> list[dict]:
             "message": (f"Skew (put−call IV) moved {base:+.1%} → {skew:+.1%} "
                         f"({shift * 100:+.1f} vol pts vs recent scans): {read}"),
             "value": round(shift, 4),
+            "dir": -1 if shift > 0 else 1,  # puts bid = bearish, calls bid = bullish
             "details": json.dumps({"skew": skew, "baseline_skew": base}),
         }]
     return []
@@ -354,6 +357,7 @@ def detect_squeeze_setup(snap: dict, contracts: list[dict], history: list[dict],
                     + f". Short-cover and dealer-hedging feedback loops both "
                       f"point the same way if this runs.{caveat}"),
         "value": float(len(conditions)),
+        "dir": 1,  # squeeze setups are an upside thesis
         "details": json.dumps({"short_interest": si, "conditions": conditions}),
     }]
 
