@@ -1,6 +1,7 @@
 """Options Sensi — options opportunity scanner. Launch with ./run.sh"""
 import logging
 import threading
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,12 +23,29 @@ scheduler = BackgroundScheduler()
 _scan_lock = threading.Lock()
 _last_scan: dict = {"at": None, "results": None}
 
+# Identifies this process in the cross-process scan lease (issue #19): if a
+# stale instance is still running against the same DB, only one of them sweeps.
+INSTANCE_ID = uuid.uuid4().hex[:8]
+
+
+def _lease_stale_seconds() -> int:
+    """Treat the lease owner as dead after a few missed scan intervals."""
+    return max(config.load()["scan_interval_minutes"] * 3, 15) * 60
+
 
 def _run_scan(force: bool = False):
-    """Scheduled scans respect market hours; manual scans (force=True) always run."""
+    """Scheduled scans respect market hours and the scan lease; manual scans
+    (force=True) always run and take ownership of the lease for this instance."""
     if not force and config.load()["market_hours_only"] and not market_clock.is_open():
         log.info("market closed; skipping scheduled scan")
         return
+    if force:
+        db.claim_lease(INSTANCE_ID)
+    else:
+        is_owner, owner = db.try_acquire_lease(INSTANCE_ID, _lease_stale_seconds())
+        if not is_owner:
+            log.warning("another instance (%s) owns scanning; staying passive", owner)
+            return
     if not _scan_lock.acquire(blocking=False):
         log.warning("scan already in progress; skipping this tick")
         return
@@ -57,6 +75,8 @@ def _schedule_job(minutes: int):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     cfg = config.load()
+    db.claim_lease(INSTANCE_ID)  # newest start wins; older instances go passive
+    log.info("instance %s started; claimed scan lease", INSTANCE_ID)
     _schedule_job(cfg["scan_interval_minutes"])
     scheduler.add_job(scanner.generate_daily_wrap, "cron",
                       day_of_week="mon-fri", hour=16, minute=15,
@@ -139,12 +159,17 @@ def trigger_wrap():
 @app.get("/api/status")
 def status():
     job = scheduler.get_job("watchlist_scan")
+    lease = db.lease_info()
+    owner = lease["instance_id"] if lease else None
     return {
         "last_scan_at": _last_scan["at"],
         "last_scan_results": _last_scan["results"],
         "next_scan_at": job.next_run_time.isoformat() if job and job.next_run_time else None,
         "scanning": _scan_lock.locked(),
         "market_open": market_clock.is_open(),
+        "instance_id": INSTANCE_ID,
+        "scan_owner": owner,
+        "is_scan_owner": owner == INSTANCE_ID,
     }
 
 

@@ -30,6 +30,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
 }
 .pill.scanning { background: #1f3a5f; color: var(--accent); }
 .pill.open { background: #11331c; color: var(--green); }
+.pill.warn { background: #5a1e1e; color: var(--red); }
 
 main {
   display: grid; grid-template-columns: 400px 1fr;

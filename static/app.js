@@ -260,6 +260,7 @@ async function refreshStatus() {
     : st.market_open ? 'market open' : 'market closed';
   pill.classList.toggle('scanning', st.scanning);
   pill.classList.toggle('open', !st.scanning && st.market_open);
+  $('#instance-warn').classList.toggle('hidden', st.is_scan_owner !== false);
   $('#last-scan').textContent = 'last scan: ' +
     (st.last_scan_at ? fmtTime(st.last_scan_at) : '—');
   $('#next-scan').textContent = 'next: ' +

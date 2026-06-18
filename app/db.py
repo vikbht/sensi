@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS signals (
     details TEXT                    -- JSON blob with supporting data
 );
 CREATE INDEX IF NOT EXISTS idx_signals_time ON signals(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS scan_lease (
+    id INTEGER PRIMARY KEY CHECK (id = 1),   -- single row
+    instance_id TEXT NOT NULL,
+    heartbeat TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -175,6 +181,72 @@ def purge_old(snapshot_days: int, signal_days: int) -> tuple[int, int]:
         (f"-{int(signal_days)} days",)).rowcount
     conn.commit()
     return snaps, sigs
+
+
+def purge_orphan_snapshots() -> int:
+    """Drop snapshots for symbols no longer on the watchlist — age-based
+    retention alone leaves removed tickers lingering up to 30 days."""
+    conn = get_conn()
+    n = conn.execute(
+        "DELETE FROM snapshots WHERE symbol NOT IN (SELECT symbol FROM watchlist)"
+    ).rowcount
+    conn.commit()
+    return n
+
+
+# --- scan lease: exactly one process should run the scheduled sweep ---
+
+def claim_lease(instance_id: str) -> None:
+    """Unconditionally take ownership — newest startup / manual scan wins."""
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO scan_lease(id, instance_id, heartbeat)
+           VALUES (1, ?, datetime('now'))
+           ON CONFLICT(id) DO UPDATE SET
+               instance_id=excluded.instance_id, heartbeat=excluded.heartbeat""",
+        (instance_id,))
+    conn.commit()
+
+
+def try_acquire_lease(instance_id: str, stale_seconds: int) -> tuple[bool, str]:
+    """Acquire/refresh the scan lease. Returns (is_owner, current_owner_id).
+
+    We own scanning if the lease is empty, already ours, or the current
+    owner's heartbeat has gone stale (its process died). Otherwise another
+    live instance owns it and we stay passive. BEGIN IMMEDIATE serializes
+    the read-modify-write across processes sharing the DB file.
+    """
+    conn = get_conn()
+    conn.commit()  # ensure no implicit transaction is open
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        row = conn.execute(
+            """SELECT instance_id,
+                      (julianday('now') - julianday(heartbeat)) * 86400 AS age
+               FROM scan_lease WHERE id = 1""").fetchone()
+        if row is None or row["instance_id"] == instance_id or row["age"] >= stale_seconds:
+            conn.execute(
+                """INSERT INTO scan_lease(id, instance_id, heartbeat)
+                   VALUES (1, ?, datetime('now'))
+                   ON CONFLICT(id) DO UPDATE SET
+                       instance_id=excluded.instance_id, heartbeat=excluded.heartbeat""",
+                (instance_id,))
+            conn.commit()
+            return True, instance_id
+        owner = row["instance_id"]
+        conn.commit()
+        return False, owner
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def lease_info() -> dict | None:
+    row = get_conn().execute(
+        """SELECT instance_id,
+                  (julianday('now') - julianday(heartbeat)) * 86400 AS age_seconds
+           FROM scan_lease WHERE id = 1""").fetchone()
+    return dict(row) if row else None
 
 
 def last_snapshot_before(symbol: str, before_utc: str) -> dict | None:

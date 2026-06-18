@@ -333,6 +333,8 @@ def scan_watchlist() -> dict:
             log.exception("scan failed for %s", sym)
             results[sym] = {"ok": False, "error": str(e)}
     purged = db.purge_old(cfg["snapshot_retention_days"], cfg["signal_retention_days"])
-    if any(purged):
-        log.info("retention purge removed %d snapshots, %d signals", *purged)
+    orphans = db.purge_orphan_snapshots()
+    if any(purged) or orphans:
+        log.info("purge removed %d aged snapshots, %d aged signals, "
+                 "%d orphan snapshots", *purged, orphans)
     return results

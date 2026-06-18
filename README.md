@@ -133,7 +133,12 @@ static/                   vanilla-JS dashboard (no build step)
   session, so they stay quiet for the first couple of scans each morning.
 - Snapshots are kept 30 days (they feed future detectors like IV rank) and
   signals 5 days (alerts get stale fast), both configurable; purged after
-  each sweep. The DB runs in WAL mode for concurrent scanner/API access.
+  each sweep, which also drops snapshots for symbols no longer on the
+  watchlist. The DB runs in WAL mode for concurrent scanner/API access.
+- Only one process scans at a time: instances share a lease in the DB, and
+  the newest start (or a manual **Scan now**) takes ownership. If a second
+  instance is left running against the same DB it goes passive (its UI shows
+  a ⚠ passive badge) rather than writing conflicting data.
 - Keep the watchlist modest (≲15 names at 5-min intervals) to avoid Yahoo
   rate-limiting; each symbol costs ~1 + `max_expirations` requests per scan.
 - This flags *anomalies*, not trades. Everything here is a starting point for
