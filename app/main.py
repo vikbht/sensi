@@ -97,6 +97,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Options Sensi", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def no_cache(request, call_next):
+    """Force the browser to revalidate assets each load — otherwise a cached
+    app.js/style.css silently outlives a frontend change (issue #25).
+    StaticFiles still sends ETag/Last-Modified, so this is a cheap 304."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 class SymbolBody(BaseModel):
     symbol: str
 
