@@ -297,6 +297,19 @@ $('#save-config').onclick = async () => {
   refreshStatus();
 };
 
+// UI scale: zoom the whole app so small labels stay readable (persisted)
+const FS_KEY = 'sensi-ui-scale';
+let uiScale = parseFloat(localStorage.getItem(FS_KEY)) || 1;
+function applyScale() { document.body.style.zoom = uiScale; }
+function setScale(v) {
+  uiScale = Math.min(1.6, Math.max(0.9, Math.round(v * 10) / 10));
+  localStorage.setItem(FS_KEY, uiScale);
+  applyScale();
+}
+$('#fs-inc').onclick = () => setScale(uiScale + 0.1);
+$('#fs-dec').onclick = () => setScale(uiScale - 0.1);
+applyScale();
+
 // Settings panel: collapsed by default, remember the user's choice
 const settingsBox = $('#settings-box');
 settingsBox.open = localStorage.getItem('sensi-settings-open') === '1';

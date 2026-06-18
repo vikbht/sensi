@@ -18,12 +18,13 @@ body {
 header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 14px 24px; border-bottom: 1px solid var(--border);
+  flex-wrap: wrap; row-gap: 10px;
 }
 h1 { font-size: 22px; letter-spacing: 1px; }
 h1 .dot { color: var(--accent); }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
      color: var(--muted); margin-bottom: 12px; }
-.status-bar { display: flex; gap: 16px; align-items: center; color: var(--muted); font-size: 13px; }
+.status-bar { display: flex; gap: 16px; align-items: center; color: var(--muted); font-size: 13px; flex-wrap: wrap; row-gap: 8px; }
 .pill {
   padding: 2px 10px; border-radius: 999px; font-size: 12px;
   background: var(--border); color: var(--muted);
@@ -31,6 +32,8 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
 .pill.scanning { background: #1f3a5f; color: var(--accent); }
 .pill.open { background: #11331c; color: var(--green); }
 .pill.warn { background: #5a1e1e; color: var(--red); }
+.textsize { display: inline-flex; gap: 4px; }
+.textsize button { padding: 4px 8px; font-size: 12px; }
 
 .view-toggle { display: flex; gap: 0; margin-left: 20px; }
 .seg {
