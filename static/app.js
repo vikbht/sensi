@@ -325,7 +325,7 @@ function renderSignalTab(d) {
     const tr = document.createElement('tr');
     const hit = s.hit == null ? '—' : `${Math.round(s.hit * 100)}%`;
     tr.innerHTML =
-      `<td class="kind">${s.kind.replaceAll('_', ' ')}</td>` +
+      `<td><span class="kind kind-link" data-help-kind="${s.kind}" title="What does this mean?">${s.kind.replaceAll('_', ' ')}</span></td>` +
       `<td class="measures">${MEASURES[s.type] || s.type}</td>` +
       `<td class="num">${s.n}</td>` +
       edgeCell(s.edge_1d, s.type === 'stillness' ? -s.edge_1d : s.edge_1d) +
@@ -352,7 +352,7 @@ function renderNameTab(d) {
       `<td class="num">${n.fires}</td>` +
       `<td class="num ${moveCls}">${move}</td>` +
       `<td class="num muted">${hit}</td>` +
-      `<td class="muted">${n.top_signal ? n.top_signal.replaceAll('_', ' ') : '—'}</td>` +
+      `<td>${n.top_signal ? `<span class="kind-link muted" data-help-kind="${n.top_signal}" title="What does this mean?">${n.top_signal.replaceAll('_', ' ')}</span>` : '<span class="muted">—</span>'}</td>` +
       `<td><span class="verdict ${n.verdict}">${n.verdict}</span></td>`;
     body.appendChild(tr);
   }
@@ -373,7 +373,7 @@ function renderHeatmap(heat) {
   grid.className = 'heat-grid';
   grid.style.gridTemplateColumns = `72px repeat(${kinds.length}, 1fr)`;
   let html = '<span></span>' +
-    kinds.map(k => `<span class="hh">${k.split('_').map(w => w.slice(0, 4)).join('')}</span>`).join('');
+    kinds.map(k => `<span class="hh kind-link" data-help-kind="${k}" title="${k.replaceAll('_', ' ')} — what does this mean?">${k.split('_').map(w => w.slice(0, 4)).join('')}</span>`).join('');
   for (const row of heat.rows) {
     html += `<span class="hname">${row.symbol}</span>`;
     for (const k of kinds) {
@@ -420,6 +420,12 @@ function showPerfTab(name) {
 }
 $('#tab-signal').onclick = () => showPerfTab('signal');
 $('#tab-name').onclick = () => showPerfTab('name');
+
+// Any signal name in the Performance view links to its help glossary entry
+$('#performance-view').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-help-kind]');
+  if (el) openHelp('help-' + el.dataset.helpKind);
+});
 
 // ---- main loop ----
 

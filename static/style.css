@@ -61,6 +61,9 @@ main {
 .perf-table th.num, .perf-table td.num { text-align: right; }
 .perf-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
 .perf-table .kind { color: var(--accent); font-weight: 500; }
+.kind-link { cursor: help; }
+.kind-link:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
+.heat-grid .hh.kind-link:hover { color: var(--text); }
 .perf-table .measures { color: var(--muted); font-size: 12px; }
 .perf-table .pos { color: var(--green); }
 .perf-table .neg { color: var(--red); }
