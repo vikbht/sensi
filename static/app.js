@@ -31,6 +31,57 @@ function detailCell(k, v) {
   return `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 }
 
+function rankColor(r) {
+  return r >= 60 ? 'var(--yellow)' : r <= 30 ? 'var(--green)' : 'var(--muted)';
+}
+
+function ivRankCell(m) {
+  if (m.iv_rank == null) {
+    return `<td class="num muted" title="${m.iv_sessions || 0} sessions — collecting">—</td>`;
+  }
+  const c = rankColor(m.iv_rank);
+  return `<td><span class="ivrank">` +
+    `<span class="ivrank-track"><span class="ivrank-fill" style="width:${m.iv_rank}%;background:${c}"></span></span>` +
+    `<span class="ivrank-num" style="color:${c}">${Math.round(m.iv_rank)}</span></span></td>`;
+}
+
+// IV history per symbol changes slowly — cache so the sparkline doesn't refetch
+// on every 15s table rebuild (only on first expand of a symbol).
+const sparkCache = {};
+
+async function drawSpark(sym) {
+  let data = sparkCache[sym];
+  if (!data) {
+    try { data = await api('/api/iv_history/' + sym); sparkCache[sym] = data; }
+    catch { return; }
+  }
+  const el = document.getElementById('iv-spark');
+  if (!el) return;  // detail row may have been rebuilt/closed
+  const pts = data.points || [];
+  if (pts.length < 2 || data.min == null) {
+    el.innerHTML = `<span class="muted" style="font-size:11.5px">IV history collecting (${pts.length} session${pts.length === 1 ? '' : 's'})…</span>`;
+    return;
+  }
+  const W = 320, H = 64, pad = 8, span = data.max - data.min || 1;
+  const x = (i) => (pts.length === 1 ? 0 : (i / (pts.length - 1)) * (W - 40));
+  const y = (v) => pad + (1 - (v - data.min) / span) * (H - 2 * pad);
+  const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.iv).toFixed(1)}`).join(' ');
+  const cur = pts[pts.length - 1].iv;
+  const cy = y(cur).toFixed(1);
+  const col = data.rank == null ? 'var(--accent)' : rankColor(data.rank);
+  el.innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:64px;display:block">` +
+    `<rect x="0" y="${pad}" width="${W - 40}" height="${H - 2 * pad}" fill="var(--border)" opacity="0.35"/>` +
+    `<polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.5"/>` +
+    `<line x1="0" y1="${cy}" x2="${W - 40}" y2="${cy}" stroke="${col}" stroke-width="1" stroke-dasharray="3 3"/>` +
+    `<circle cx="${(W - 40).toFixed(1)}" cy="${cy}" r="3" fill="${col}"/>` +
+    `<text x="${W - 36}" y="${pad + 4}" font-size="10" fill="var(--muted)">${(data.max * 100).toFixed(0)}%</text>` +
+    `<text x="${W - 36}" y="${H - 2}" font-size="10" fill="var(--muted)">${(data.min * 100).toFixed(0)}%</text>` +
+    `</svg>` +
+    `<div class="spark-cap muted">ATM IV over ${data.sessions} session${data.sessions === 1 ? '' : 's'} · now ${(cur * 100).toFixed(0)}%` +
+    `${data.rank != null ? ` (rank ${Math.round(data.rank)})` : ''}</div>`;
+}
+
 async function refreshTable() {
   const rows = await api('/api/metrics');
   const tbody = $('#watch-body');
@@ -50,6 +101,7 @@ async function refreshTable() {
       <td class="sym">${m.symbol}</td>
       <td class="num ${m.spot == null ? 'stale' : ''}">${price}</td>
       <td class="num"><span class="${ivhv > 1.25 ? 'hot' : ''}">${ivhv ? ivhv.toFixed(2) : '—'}</span>${m.atm_dte != null ? ` <span class="dte" title="Horizon of the IV reading: nearest expiry">${m.atm_dte}d</span>` : ''}</td>
+      ${ivRankCell(m)}
       <td class="num">${m.pc_ratio ?? '—'}</td>
       <td class="num">${m.confluence_24h ? '<span class="flame" title="Confluence in the last 24h">🔥</span>' : ''}${m.signals_24h ? `<span class="badge">${m.signals_24h}</span>` : ''}</td>
       <td><button class="remove" title="Remove ${m.symbol}">×</button></td>`;
@@ -79,9 +131,12 @@ async function refreshTable() {
         earnings = new Date(m.next_earnings).toLocaleDateString([], { month: 'short', day: 'numeric' }) +
                    (days >= 0 ? ` (${days}d)` : '');
       }
-      dr.innerHTML = `<td colspan="6"><div class="detail-grid">
+      const rankTxt = m.iv_rank == null ? '—'
+        : `${Math.round(m.iv_rank)}${m.iv_pctile != null ? ` · ${Math.round(m.iv_pctile)} pctile` : ''}`;
+      dr.innerHTML = `<td colspan="7"><div class="detail-grid">
         ${detailCell('ATM IV', pct(m.atm_iv) + (m.atm_dte != null ? ` · ${m.atm_dte}d` : ''))}
         ${detailCell('HV 20d', pct(m.hv20))}
+        ${detailCell('IV rank', rankTxt)}
         ${detailCell('Call vol', num(m.call_volume))}
         ${detailCell('Put vol', num(m.put_volume))}
         ${detailCell('Peak γ strike', m.peak_gamma_strike ?? '—')}
@@ -90,8 +145,9 @@ async function refreshTable() {
         ${detailCell('Earnings', earnings)}
         ${detailCell('Short float', shortFloat)}
         ${detailCell('Scanned', m.scanned_at ? fmtTime(m.scanned_at) : 'pending')}
-      </div></td>`;
+      </div><div id="iv-spark" class="iv-spark"></div></td>`;
       tbody.appendChild(dr);
+      drawSpark(m.symbol);
     }
   }
 }

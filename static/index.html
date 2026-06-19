@@ -53,6 +53,15 @@
         It varies by ticker (a few days for daily-listing ETFs, weeks for
         single names), so compare IV/HV across names with the horizons in
         mind.</dd>
+        <dt>IV rank</dt>
+        <dd>Where the current ATM IV sits in its own trailing range, 0–100
+        (the bar fills to the rank). High (amber, ≥60) = IV is rich versus
+        this name's own history — options expensive, the move is more
+        anticipated than usual. Low (green, ≤30) = IV cheap. Unlike IV/HV,
+        this is comparable across names. The window grows toward a year as
+        history accrues; expand a row for the IV sparkline and percentile.
+        Glitchy outlier readings are filtered so one bad print can't distort
+        the range.</dd>
         <dt>P/C</dt>
         <dd>Today's put volume ÷ call volume across the scanned expirations.
         Balanced names sit roughly 0.5–1.2. High (≥2) means heavy put activity
@@ -218,6 +227,7 @@
         <thead>
           <tr>
             <th>Sym</th><th class="num">Price</th><th class="num" title="ATM IV / 20d HV">IV/HV</th>
+            <th title="Where ATM IV sits in its own history (0=cheap, 100=rich)">IV rank</th>
             <th class="num" title="Put/Call volume ratio">P/C</th>
             <th class="num" title="Signals in the last 24h">⚡</th><th></th>
           </tr>

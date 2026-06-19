@@ -80,6 +80,10 @@ DEFAULTS = {
     "baseline_window_days": 60,
     # Min samples before an outcome verdict is shown rather than "collecting"
     "outcome_min_samples": 10,
+    # IV rank: where today's ATM IV sits in its own trailing range. Window
+    # grows toward a year as history accrues; needs a few sessions first.
+    "iv_rank_window_days": 252,
+    "iv_rank_min_sessions": 5,
 }
 
 _lock = threading.Lock()

@@ -29,8 +29,11 @@ a symbol; afterwards on the configured interval.
   the last 24h). IV/HV carries a small `Nd` horizon tag — the days to the
   nearest expiry the IV is read from — so different listing cadences
   (daily ETFs vs monthly small caps) are visible rather than silently
-  conflated. Click a row to
-  expand full metrics (ATM IV, HV, volumes, peak gamma strike, skew, net GEX)
+  conflated. An IV rank column shows where each name's ATM IV sits in its
+  own trailing range (0–100, amber = rich / green = cheap) — comparable
+  across names in a way IV/HV isn't. Click a row to
+  expand full metrics (ATM IV, HV, IV rank + percentile + sparkline, volumes,
+  peak gamma strike, skew, net GEX)
   and filter the feed to that name. Negative numbers render finance-style in
   parentheses.
 - **Signal feed** — split into **Today** and **Older** sections; a purple

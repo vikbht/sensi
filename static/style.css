@@ -132,6 +132,13 @@ tr.watch-row .sym { font-weight: 700; color: var(--accent); }
 tr.watch-row .stale { color: var(--muted); }
 td .hot { color: var(--yellow); }
 .dte { color: var(--muted); font-size: 10.5px; }
+.ivrank { display: flex; align-items: center; gap: 5px; }
+.ivrank-track { flex: 1; min-width: 24px; height: 6px; background: var(--border);
+  border-radius: 3px; overflow: hidden; }
+.ivrank-fill { display: block; height: 100%; border-radius: 3px; }
+.ivrank-num { font-size: 12px; width: 18px; text-align: right; }
+.iv-spark { margin-top: 10px; }
+.spark-cap { font-size: 11px; margin-top: 2px; }
 .chg { font-size: 11px; font-weight: 600; }
 .chg.up { color: var(--green); }
 .chg.down { color: var(--red); }

@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config, db, market_clock, scanner
+from .analytics import iv_rank
 from .analytics import outcomes as outcomes_mod
 
 logging.basicConfig(level=logging.INFO,
@@ -134,7 +135,30 @@ def remove_from_watchlist(symbol: str):
 
 @app.get("/api/metrics")
 def get_metrics():
-    return db.latest_metrics()
+    cfg = config.load()
+    rows = db.latest_metrics()
+    for r in rows:
+        series = iv_rank.clean_series(db.daily_iv_series(r["symbol"], cfg["iv_rank_window_days"]))
+        vals = [v for _, v in series]
+        rk = iv_rank.rank_and_pctile(vals) if len(vals) >= cfg["iv_rank_min_sessions"] else None
+        r["iv_rank"] = rk["rank"] if rk else None
+        r["iv_pctile"] = rk["pctile"] if rk else None
+        r["iv_sessions"] = len(vals)
+    return rows
+
+
+@app.get("/api/iv_history/{symbol}")
+def iv_history(symbol: str):
+    cfg = config.load()
+    series = iv_rank.clean_series(db.daily_iv_series(symbol.upper(), cfg["iv_rank_window_days"]))
+    vals = [v for _, v in series]
+    rk = iv_rank.rank_and_pctile(vals) if len(vals) >= cfg["iv_rank_min_sessions"] else None
+    return {
+        "points": [{"date": d, "iv": v} for d, v in series],
+        "min": min(vals) if vals else None, "max": max(vals) if vals else None,
+        "rank": rk["rank"] if rk else None, "pctile": rk["pctile"] if rk else None,
+        "sessions": len(vals),
+    }
 
 
 @app.get("/api/signals")

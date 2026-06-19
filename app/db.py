@@ -178,6 +178,21 @@ def latest_metrics() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def daily_iv_series(symbol: str, days: int) -> list[tuple[str, float]]:
+    """One ATM IV per calendar day (the day's last reading) over the trailing
+    window, oldest first — the series IV rank and the sparkline are built from."""
+    rows = get_conn().execute(
+        """SELECT date(scanned_at) AS d, atm_iv FROM snapshots
+           WHERE symbol = ? AND atm_iv IS NOT NULL
+             AND scanned_at >= datetime('now', ?)
+           ORDER BY id""",
+        (symbol, f"-{int(days)} days")).fetchall()
+    per_day: dict[str, float] = {}
+    for r in rows:
+        per_day[r["d"]] = r["atm_iv"]  # later rows overwrite -> last of day
+    return [(d, per_day[d]) for d in sorted(per_day)]
+
+
 def snapshot_history(symbol: str, limit: int = 200) -> list[dict]:
     rows = get_conn().execute(
         "SELECT * FROM snapshots WHERE symbol = ? ORDER BY scanned_at ASC, id ASC LIMIT ?",
