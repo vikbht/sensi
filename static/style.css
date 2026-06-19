@@ -8,6 +8,12 @@
   --green: #3fb950;
   --yellow: #d29922;
   --red: #f85149;
+  /* setup_read accent — distinct teal, kept apart from the severity palette */
+  --setup-accent: #2dd4bf;
+  --setup-bg: #102a2a;
+  --setup-border: #1f6e63;
+  --setup-ink: #06231f;
+  --setup-sym: #5eead4;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -243,16 +249,16 @@ tr.detail-row td { background: var(--bg); padding: 10px 12px; }
 .signal.setup.fresh,
 .signal.setup.info,
 .signal.setup.warning {
-  background: #102a2a;
-  border-color: #1f6e63;
-  border-left: 3px solid #2dd4bf;
-  box-shadow: 0 0 0 1px #1f6e63;
+  background: var(--setup-bg);
+  border-color: var(--setup-border);
+  border-left: 3px solid var(--setup-accent);
+  box-shadow: 0 0 0 1px var(--setup-border);
 }
 .signal.setup .kind {
-  background: #2dd4bf; color: #06231f; font-weight: 700;
+  background: var(--setup-accent); color: var(--setup-ink); font-weight: 700;
   padding: 1px 8px; border-radius: 999px; text-decoration: none;
 }
-.signal.setup .sym { color: #5eead4; }
+.signal.setup .sym { color: var(--setup-sym); }
 
 .signal.wrap {
   border-color: #3c3489; border-left: 3px solid #7f77dd; background: #16182b;
