@@ -212,8 +212,9 @@ function isFresh(utc) {
 
 function signalCard(s) {
   const fresh = isFresh(s.created_at);
+  const isSetup = s.kind === 'setup_read';
   const div = document.createElement('div');
-  div.className = `signal ${s.severity}${fresh ? ' fresh' : ''}`;
+  div.className = `signal ${s.severity}${isSetup ? ' setup' : ''}${fresh ? ' fresh' : ''}`;
   div.innerHTML = `
     <div class="head">
       <span class="sym"></span>

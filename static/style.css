@@ -238,6 +238,22 @@ tr.detail-row td { background: var(--bg); padding: 10px 12px; }
   border-color: #2c4a77;
   box-shadow: 0 0 0 1px #2c4a77;
 }
+/* setup_read is always prominent — distinct teal, persists over severity + fresh */
+.signal.setup,
+.signal.setup.fresh,
+.signal.setup.info,
+.signal.setup.warning {
+  background: #102a2a;
+  border-color: #1f6e63;
+  border-left: 3px solid #2dd4bf;
+  box-shadow: 0 0 0 1px #1f6e63;
+}
+.signal.setup .kind {
+  background: #2dd4bf; color: #06231f; font-weight: 700;
+  padding: 1px 8px; border-radius: 999px; text-decoration: none;
+}
+.signal.setup .sym { color: #5eead4; }
+
 .signal.wrap {
   border-color: #3c3489; border-left: 3px solid #7f77dd; background: #16182b;
 }
