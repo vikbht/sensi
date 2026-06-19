@@ -54,6 +54,10 @@ DEFAULTS = {
         # with IV/HV no higher than the max (otherwise expansion is priced)
         "vol_compression_ratio": 0.6,
         "vol_compression_max_ivhv": 1.1,
+        # Setup read fires when IV rank is at/below low (cheap) or at/above
+        # high (rich), combined with a directional lean in the flow
+        "iv_rank_low": 30,
+        "iv_rank_high": 70,
     },
     # How many recent snapshots form the comparison baseline
     "baseline_snapshots": 6,
@@ -84,6 +88,9 @@ DEFAULTS = {
     # grows toward a year as history accrues; needs a few sessions first.
     "iv_rank_window_days": 252,
     "iv_rank_min_sessions": 5,
+    # Setup read: synthesize an IV-rank extreme with directional flow into one
+    # actionable feed entry (it's a periodic read, so a long cooldown).
+    "setup_read_cooldown_minutes": 360,
 }
 
 _lock = threading.Lock()

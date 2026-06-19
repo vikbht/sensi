@@ -385,6 +385,65 @@ def detect_vol_compression(snap: dict, th: dict) -> list[dict]:
     }]
 
 
+def _flow_lean(snap: dict, th: dict, ctx: dict) -> tuple[str, str, int]:
+    """Read a directional lean from current flow. Returns (lean, reasons, dir)."""
+    pc, skew = snap.get("pc_ratio"), snap.get("skew")
+    short = (ctx or {}).get("short_interest", {}).get("pct_float")
+    bull, bear, reasons = 0, 0, []
+    if pc is not None and pc <= th["pc_ratio_low"] * 1.25:
+        bull += 1
+        reasons.append(f"call-heavy flow (P/C {pc:.2f})")
+    if skew is not None and skew <= -0.01:
+        bull += 1
+        reasons.append("inverted skew")
+    if short and short >= th["squeeze_min_short_float"] and pc is not None and pc <= 1:
+        bull += 1
+        reasons.append(f"{short:.0%} short float")
+    if pc is not None and pc >= th["pc_ratio_high"]:
+        bear += 1
+        reasons.append(f"put-heavy flow (P/C {pc:.2f})")
+    if bull > bear and bull >= 1:
+        return "bull", ", ".join(reasons), 1
+    if bear > bull:
+        return "bear", ", ".join(reasons), -1
+    return "none", "", 0
+
+
+def detect_setup_read(snap: dict, history: list[dict], th: dict, ctx: dict) -> list[dict]:
+    """Synthesize an IV-rank extreme with the directional flow into one read.
+
+    Only fires with a real lean — pure "vol cheap/rich, no direction" is
+    already visible in the IV rank column and isn't worth a feed entry.
+    """
+    r = (ctx or {}).get("iv_rank")
+    if r is None or th["iv_rank_low"] < r < th["iv_rank_high"]:
+        return []
+    lean, reasons, d = _flow_lean(snap, th, ctx)
+    if lean == "none":
+        return []
+    rt = round(r)
+    if r <= th["iv_rank_low"]:  # cheap vol
+        if lean == "bull":
+            msg = (f"Setup: cheap vol (IV rank {rt}) + bullish flow — {reasons}. "
+                   f"Optionality is inexpensive on an upside setup; long calls or "
+                   f"call debit spreads are well-priced rather than chasing rich premium.")
+        else:
+            msg = (f"Setup: cheap vol (IV rank {rt}) + put-heavy flow — {reasons}. "
+                   f"Inexpensive downside optionality if the pressure is real.")
+        sev = "warning"
+    else:  # rich vol
+        side = "bullish" if lean == "bull" else "bearish"
+        msg = (f"Setup: rich vol (IV rank {rt}) + {side} flow — {reasons}. "
+               f"The move is well-priced; defined-risk spreads beat naked long options, "
+               f"and selling premium is on the table if the catalyst is already in.")
+        sev = "info"
+    return [{
+        "kind": "setup_read", "severity": sev, "message": msg,
+        "value": float(rt), "dir": d,
+        "details": json.dumps({"iv_rank": r, "lean": lean, "reasons": reasons}),
+    }]
+
+
 def run_all(snap: dict, contracts: list[dict], history: list[dict], th: dict,
             ctx: dict) -> list[dict]:
     signals = []
@@ -396,4 +455,5 @@ def run_all(snap: dict, contracts: list[dict], history: list[dict], th: dict,
     signals += detect_skew_shift(snap, history, th)
     signals += detect_squeeze_setup(snap, contracts, history, th, ctx)
     signals += detect_vol_compression(snap, th)
+    signals += detect_setup_read(snap, history, th, ctx)
     return signals

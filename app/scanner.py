@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import date, datetime, timezone
 
 from . import config, db, market_clock
+from .analytics import iv_rank
 from .analytics import outcomes as outcomes_mod
 from .analytics import signals as detectors
 from .analytics.black_scholes import gamma as bs_gamma
@@ -25,6 +26,7 @@ _short_cache: dict[str, tuple[date, dict | None]] = {}
 KIND_COOLDOWN_KEYS = {
     "squeeze_setup": "squeeze_cooldown_minutes",
     "vol_compression": "vol_compression_cooldown_minutes",
+    "setup_read": "setup_read_cooldown_minutes",
 }
 
 
@@ -193,12 +195,19 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
                                   since_utc=market_clock.session_start_utc())
     db.insert_snapshot(snap)
 
+    iv_series = iv_rank.clean_series(
+        db.daily_iv_series(symbol, cfg["iv_rank_window_days"]))
+    iv_vals = [v for _, v in iv_series]
+    ivr = (iv_rank.rank_and_pctile(iv_vals)
+           if len(iv_vals) >= cfg["iv_rank_min_sessions"] else None)
+
     ctx = {
         "elapsed_fraction": market_clock.elapsed_fraction(),
         "pace_divisor": market_clock.pace_divisor(),
         "minutes_since_open": market_clock.minutes_since_open(),
         "gex_drivers": gex_drivers,
         "short_interest": short_interest,
+        "iv_rank": ivr["rank"] if ivr else None,
     }
     found = detectors.run_all(snap, contracts, history, cfg["thresholds"], ctx)
     emitted = []
