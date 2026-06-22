@@ -69,6 +69,7 @@ a symbol; afterwards on the configured interval.
 | `gamma_pin` | Peak gamma strike within 2% of spot | Pin/magnet risk into expiry |
 | `skew_shift` | OTM put IV minus OTM call IV moved ≥4 vol pts vs baseline | Crash protection getting bid, or upside being chased |
 | `setup_read` | IV rank at an extreme (≤30 cheap / ≥70 rich) + a directional flow lean | Synthesizes vol level and flow into one structural read (cheap vol + bullish flow → well-priced upside optionality, etc.) |
+| `strike_concentration` | ≥40% of the day's option premium piled into one contract (with a $ floor) | A single strike drawing that much flow = position-building; the most-active strike is also always in the detail panel + daily wrap |
 | `confluence` | ≥3 distinct signal kinds on one symbol within 4h | Independent detectors agreeing — the strongest pattern here; flagged 🔥 in the watchlist |
 | `squeeze_setup` | ≥10% short float + ≥3 of: call-heavy flow, fresh OTM call buying, inverted skew, price+IV rising | Short-cover and dealer-hedging feedback loops aligned; warns when the naive GEX sign is likely inverted |
 | `vol_compression` | 10d HV ≤ 0.6× 20d HV with IV not pricing expansion | Coiled spring — compressed ranges resolve violently, direction unknown |

@@ -38,6 +38,15 @@ def _fmt_drivers(drivers: list[dict], limit: int = 2) -> str:
     return ", ".join(parts)
 
 
+def _usd(x: float) -> str:
+    """Unsigned humanized dollars: $2.1M, $50K."""
+    a = abs(x)
+    for div, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if a >= div:
+            return f"${a / div:.1f}{suffix}"
+    return f"${a:.0f}"
+
+
 def _baseline(history: list[dict], field: str) -> float | None:
     """Average of a field over prior snapshots (history excludes the current one)."""
     vals = [s[field] for s in history if s.get(field) is not None]
@@ -444,6 +453,30 @@ def detect_setup_read(snap: dict, history: list[dict], th: dict, ctx: dict) -> l
     }]
 
 
+def detect_strike_concentration(snap: dict, th: dict, ctx: dict) -> list[dict]:
+    """One contract drawing an outsized share of the day's premium = someone
+    building a position, not spread-out activity."""
+    top = (ctx or {}).get("top_strike")
+    if not top or top.get("concentration") is None:
+        return []
+    conc, prem = top["concentration"], top["premium"]
+    if conc < th["strike_concentration_pct"] or prem < th["strike_concentration_min_premium"]:
+        return []
+    side = "calls" if top["type"] == "call" else "puts"
+    return [{
+        "kind": "strike_concentration",
+        "severity": "warning",
+        "message": (f"{conc:.0%} of today's option premium is piled into one contract "
+                    f"— {top['label']}, {_usd(prem)} traded ({top['volume']:,} {side}). "
+                    f"One strike drawing this much of the flow looks like "
+                    f"position-building, not spread-out activity."),
+        "value": round(conc, 3),
+        "dir": 1 if top["type"] == "call" else -1,
+        "details": json.dumps({k: top[k] for k in
+                               ("label", "premium", "concentration", "volume", "type")}),
+    }]
+
+
 def run_all(snap: dict, contracts: list[dict], history: list[dict], th: dict,
             ctx: dict) -> list[dict]:
     signals = []
@@ -456,4 +489,5 @@ def run_all(snap: dict, contracts: list[dict], history: list[dict], th: dict,
     signals += detect_squeeze_setup(snap, contracts, history, th, ctx)
     signals += detect_vol_compression(snap, th)
     signals += detect_setup_read(snap, history, th, ctx)
+    signals += detect_strike_concentration(snap, th, ctx)
     return signals

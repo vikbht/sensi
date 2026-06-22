@@ -8,7 +8,8 @@ let kindFilter = '';
 const SIGNAL_KINDS = [
   'setup_read', 'confluence', 'squeeze_setup', 'vol_compression',
   'iv_premium', 'iv_spike', 'unusual_volume', 'put_call_ratio',
-  'gamma_build', 'gamma_flip', 'gamma_pin', 'skew_shift', 'daily_wrap',
+  'strike_concentration', 'gamma_build', 'gamma_flip', 'gamma_pin',
+  'skew_shift', 'daily_wrap',
 ];
 // Scan cadence (minutes), kept in sync by loadConfig — drives the
 // "fresh signal" highlight window
@@ -24,6 +25,14 @@ async function api(path, opts) {
 const paren = (text, isNeg) => isNeg ? `(${text})` : text;
 const pct = (v) => v == null ? '—' : paren((Math.abs(v) * 100).toFixed(1) + '%', v < 0);
 const num = (v) => v == null ? '—' : paren(Math.abs(Number(v)).toLocaleString(), v < 0);
+function usd(v) {
+  if (v == null) return '—';
+  const a = Math.abs(v);
+  if (a >= 1e9) return '$' + (a / 1e9).toFixed(1) + 'B';
+  if (a >= 1e6) return '$' + (a / 1e6).toFixed(1) + 'M';
+  if (a >= 1e3) return '$' + Math.round(a / 1e3) + 'K';
+  return '$' + Math.round(a);
+}
 
 function fmtTime(utc) {
   // SQLite timestamps lack timezone info (they're UTC); ISO ones already have it
@@ -154,6 +163,9 @@ async function refreshTable() {
         ${detailCell('Call vol', num(m.call_volume))}
         ${detailCell('Put vol', num(m.put_volume))}
         ${detailCell('Peak γ strike', m.peak_gamma_strike ?? '—')}
+        ${detailCell('Most active', m.top_active
+          ? `${m.top_active} · ${usd(m.top_premium)}${m.top_concentration != null ? ` (${Math.round(m.top_concentration * 100)}%)` : ''}`
+          : '—')}
         ${detailCell('Skew (p−c)', pct(m.skew))}
         ${detailCell('Net GEX /1%', gex)}
         ${detailCell('Earnings', earnings)}
@@ -281,7 +293,8 @@ function wrapCard(s) {
     <span>${fmtChg(r.day_chg)}</span>
     <span>${fmtIv(r)}</span>
     <span class="headline">${r.confluence ? '🔥 ' : ''}${r.headline
-      ? r.headline.text.replace(/</g, '&lt;') : '<span class="quiet-note">quiet — no signals</span>'}</span>`).join('');
+      ? r.headline.text.replace(/</g, '&lt;') : '<span class="quiet-note">quiet — no signals</span>'}${r.top_active
+      ? `<span class="muted"> · most active ${r.top_active} (${usd(r.top_premium)})</span>` : ''}</span>`).join('');
   div.innerHTML = `
     <div class="head">
       <span class="wrap-title">Daily wrap</span>

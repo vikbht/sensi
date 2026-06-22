@@ -104,6 +104,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE snapshots ADD COLUMN days_to_cover REAL")
     if "atm_dte" not in cols:
         conn.execute("ALTER TABLE snapshots ADD COLUMN atm_dte INTEGER")
+    if "top_active" not in cols:
+        conn.execute("ALTER TABLE snapshots ADD COLUMN top_active TEXT")
+        conn.execute("ALTER TABLE snapshots ADD COLUMN top_premium REAL")
+        conn.execute("ALTER TABLE snapshots ADD COLUMN top_concentration REAL")
     conn.commit()
 
 
@@ -133,11 +137,12 @@ def insert_snapshot(s: dict) -> None:
     conn.execute(
         """INSERT INTO snapshots(symbol, spot, atm_iv, hv20, hv10, call_volume,
                put_volume, pc_ratio, net_gex, peak_gamma_strike, skew, next_earnings,
-               prev_close, short_pct_float, days_to_cover, atm_dte)
+               prev_close, short_pct_float, days_to_cover, atm_dte,
+               top_active, top_premium, top_concentration)
            VALUES (:symbol, :spot, :atm_iv, :hv20, :hv10, :call_volume,
                :put_volume, :pc_ratio, :net_gex, :peak_gamma_strike, :skew,
                :next_earnings, :prev_close, :short_pct_float, :days_to_cover,
-               :atm_dte)""",
+               :atm_dte, :top_active, :top_premium, :top_concentration)""",
         s,
     )
     conn.commit()
@@ -164,6 +169,7 @@ def latest_metrics() -> list[dict]:
                   s.call_volume, s.put_volume, s.pc_ratio, s.net_gex,
                   s.peak_gamma_strike, s.skew, s.scanned_at, s.next_earnings,
                   s.prev_close, s.short_pct_float, s.days_to_cover, s.atm_dte,
+                  s.top_active, s.top_premium, s.top_concentration,
                   (SELECT COUNT(*) FROM signals sig WHERE sig.symbol = w.symbol
                      AND sig.created_at >= datetime('now', '-1 day')) AS signals_24h,
                   (SELECT COUNT(*) FROM signals sig WHERE sig.symbol = w.symbol

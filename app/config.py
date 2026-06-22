@@ -65,6 +65,10 @@ DEFAULTS = {
         # high (rich), combined with a directional lean in the flow
         "iv_rank_low": 30,
         "iv_rank_high": 70,
+        # Strike concentration: one contract holding this share of the day's
+        # total option premium, with at least this many dollars in it
+        "strike_concentration_pct": 0.40,
+        "strike_concentration_min_premium": 50_000,
     },
     # How many recent snapshots form the comparison baseline
     "baseline_snapshots": 6,
@@ -98,6 +102,7 @@ DEFAULTS = {
     # Setup read: synthesize an IV-rank extreme with directional flow into one
     # actionable feed entry (it's a periodic read, so a long cooldown).
     "setup_read_cooldown_minutes": 360,
+    "strike_concentration_cooldown_minutes": 240,
 }
 
 _lock = threading.Lock()

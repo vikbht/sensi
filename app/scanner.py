@@ -28,7 +28,36 @@ KIND_COOLDOWN_KEYS = {
     "squeeze_setup": "squeeze_cooldown_minutes",
     "vol_compression": "vol_compression_cooldown_minutes",
     "setup_read": "setup_read_cooldown_minutes",
+    "strike_concentration": "strike_concentration_cooldown_minutes",
 }
+
+
+def _top_strike(contracts: list[dict]) -> dict | None:
+    """The single contract drawing the most premium today (volume x mid x 100
+    = where the money actually went), plus its share of total premium."""
+    rows, total = [], 0.0
+    for c in contracts:
+        vol = c.get("volume") or 0
+        if vol <= 0:
+            continue
+        bid, ask, last = c.get("bid"), c.get("ask"), c.get("last")
+        mid = (bid + ask) / 2 if (bid and ask) else (last or bid or ask)
+        if not mid or mid <= 0:
+            continue
+        prem = vol * mid * CONTRACT_MULTIPLIER
+        rows.append((prem, c))
+        total += prem
+    if not rows:
+        return None
+    prem, c = max(rows, key=lambda r: r[0])
+    side = "C" if c["type"] == "call" else "P"
+    return {
+        "label": f"${c['strike']:g}{side} {c['expiry']}",
+        "premium": prem,
+        "concentration": prem / total if total > 0 else None,
+        "type": c["type"], "strike": c["strike"], "expiry": c["expiry"],
+        "volume": c["volume"],
+    }
 
 
 def _next_earnings(symbol: str) -> date | None:
@@ -170,6 +199,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
     earnings = _next_earnings(symbol)
     days_to_earnings = (earnings - date.today()).days if earnings else None
     short_interest = _short_interest(symbol) or {}
+    top = _top_strike(contracts)
 
     snap = {
         "symbol": symbol,
@@ -188,6 +218,9 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         "prev_close": _prev_close(closes),
         "short_pct_float": short_interest.get("pct_float"),
         "days_to_cover": short_interest.get("days_to_cover"),
+        "top_active": top["label"] if top else None,
+        "top_premium": top["premium"] if top else None,
+        "top_concentration": top["concentration"] if top else None,
     }
 
     # Baseline = snapshots taken BEFORE this scan, scoped to today's session so
@@ -209,6 +242,7 @@ def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
         "gex_drivers": gex_drivers,
         "short_interest": short_interest,
         "iv_rank": ivr["rank"] if ivr else None,
+        "top_strike": top,
     }
     found = detectors.run_all(snap, contracts, history, cfg["thresholds"], ctx)
     emitted = []
@@ -295,6 +329,8 @@ def generate_daily_wrap(force: bool = False) -> bool:
             "signals": len(sigs),
             "confluence": confluences > 0,
             "headline": _headline(sigs),
+            "top_active": last.get("top_active") if last else None,
+            "top_premium": last.get("top_premium") if last else None,
         })
 
     day = market_clock.now_et().strftime("%a %b %d")
