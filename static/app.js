@@ -199,7 +199,7 @@ $('#help-overlay').addEventListener('click', (e) => {
   if (e.target === $('#help-overlay')) closeHelp();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeHelp();
+  if (e.key === 'Escape') { closeHelp(); closeSettings(); }
 });
 
 // ---- signals ----
@@ -367,11 +367,12 @@ $('#fs-inc').onclick = () => setScale(uiScale + 0.1);
 $('#fs-dec').onclick = () => setScale(uiScale - 0.1);
 applyScale();
 
-// Settings panel: collapsed by default, remember the user's choice
-const settingsBox = $('#settings-box');
-settingsBox.open = localStorage.getItem('sensi-settings-open') === '1';
-settingsBox.addEventListener('toggle', () => {
-  localStorage.setItem('sensi-settings-open', settingsBox.open ? '1' : '0');
+// Settings overlay (header button — same pattern as help)
+function closeSettings() { $('#settings-overlay').classList.add('hidden'); }
+$('#settings-btn').onclick = () => $('#settings-overlay').classList.remove('hidden');
+$('#settings-close').onclick = closeSettings;
+$('#settings-overlay').addEventListener('click', (e) => {
+  if (e.target === $('#settings-overlay')) closeSettings();
 });
 
 // ---- performance view ----
