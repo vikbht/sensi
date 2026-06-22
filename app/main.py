@@ -1,6 +1,7 @@
 """Options Sensi — options opportunity scanner. Launch with ./run.sh"""
 import logging
 import threading
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -23,7 +24,7 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 scheduler = BackgroundScheduler()
 _scan_lock = threading.Lock()
-_last_scan: dict = {"at": None, "results": None}
+_last_scan: dict = {"at": None, "results": None, "duration": None}
 
 # Identifies this process in the cross-process scan lease (issue #19): if a
 # stale instance is still running against the same DB, only one of them sweeps.
@@ -52,9 +53,11 @@ def _run_scan(force: bool = False):
         log.warning("scan already in progress; skipping this tick")
         return
     try:
+        started = time.monotonic()
         results = scanner.scan_watchlist()
         _last_scan["at"] = datetime.now(timezone.utc).isoformat()
         _last_scan["results"] = results
+        _last_scan["duration"] = round(time.monotonic() - started, 1)
     finally:
         _scan_lock.release()
 
@@ -217,6 +220,7 @@ def status():
     return {
         "last_scan_at": _last_scan["at"],
         "last_scan_results": _last_scan["results"],
+        "last_scan_duration": _last_scan.get("duration"),
         "next_scan_at": job.next_run_time.isoformat() if job and job.next_run_time else None,
         "scanning": _scan_lock.locked(),
         "market_open": market_clock.is_open(),

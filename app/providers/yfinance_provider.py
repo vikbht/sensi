@@ -78,8 +78,8 @@ class YFinanceProvider(OptionsDataProvider):
         except Exception:
             return None
 
-    def get_option_chain(self, symbol: str, max_expirations: int,
-                         min_days_to_expiry: int) -> list[dict]:
+    def get_option_chain(self, symbol: str, dte_min: int, dte_max: int,
+                         max_expirations: int) -> list[dict]:
         t = yf.Ticker(symbol)
         try:
             expirations = _retry(lambda: t.options, f"{symbol} expirations") or ()
@@ -89,12 +89,12 @@ class YFinanceProvider(OptionsDataProvider):
         today = date.today()
         contracts: list[dict] = []
         picked = 0
-        for exp in expirations:
+        for exp in expirations:  # yfinance returns these in ascending date order
             dte = (datetime.strptime(exp, "%Y-%m-%d").date() - today).days
-            if dte < min_days_to_expiry:
+            if dte < dte_min:
                 continue
-            if picked >= max_expirations:
-                break
+            if dte > dte_max or picked >= max_expirations:
+                break  # past the window (sorted) or hit the rate-limit cap
             try:
                 chain = _retry(lambda e=exp: t.option_chain(e), f"{symbol} {exp}")
             except Exception:

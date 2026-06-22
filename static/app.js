@@ -319,7 +319,8 @@ async function refreshStatus() {
   pill.classList.toggle('open', !st.scanning && st.market_open);
   $('#instance-warn').classList.toggle('hidden', st.is_scan_owner !== false);
   $('#last-scan').textContent = 'last scan: ' +
-    (st.last_scan_at ? fmtTime(st.last_scan_at) : '—');
+    (st.last_scan_at ? fmtTime(st.last_scan_at) : '—') +
+    (st.last_scan_duration != null ? ` (${st.last_scan_duration}s)` : '');
   $('#next-scan').textContent = 'next: ' +
     (st.next_scan_at ? new Date(st.next_scan_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—');
 }

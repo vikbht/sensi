@@ -2,6 +2,7 @@
 import json
 import logging
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 
 from . import config, db, market_clock
@@ -158,7 +159,7 @@ def _gamma_profile(contracts: list[dict], spot: float
 def scan_symbol(symbol: str, cfg: dict) -> list[dict]:
     spot, closes = provider.get_spot_and_history(symbol)
     contracts = provider.get_option_chain(
-        symbol, cfg["max_expirations"], cfg["min_days_to_expiry"])
+        symbol, cfg["dte_min"], cfg["dte_max"], cfg["max_expirations"])
     if not contracts:
         log.warning("%s: no option contracts returned", symbol)
         return []
@@ -383,12 +384,18 @@ def scan_watchlist() -> dict:
     cfg = config.load()
     symbols = db.list_watchlist()
     results: dict[str, object] = {}
-    for sym in symbols:
-        try:
-            results[sym] = {"signals": len(scan_symbol(sym, cfg)), "ok": True}
-        except Exception as e:  # one bad ticker must not kill the sweep
-            log.exception("scan failed for %s", sym)
-            results[sym] = {"ok": False, "error": str(e)}
+    # Scan symbols in parallel — each thread gets its own SQLite connection
+    # (db uses thread-local connections), so concurrent writes are safe.
+    workers = max(1, min(cfg.get("scan_workers", 4), len(symbols) or 1))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(scan_symbol, sym, cfg): sym for sym in symbols}
+        for fut in as_completed(futures):
+            sym = futures[fut]
+            try:
+                results[sym] = {"signals": len(fut.result()), "ok": True}
+            except Exception as e:  # one bad ticker must not kill the sweep
+                log.exception("scan failed for %s", sym)
+                results[sym] = {"ok": False, "error": str(e)}
     purged = db.purge_old(cfg["snapshot_retention_days"], cfg["signal_retention_days"])
     orphans = db.purge_orphan_snapshots()
     if any(purged) or orphans:

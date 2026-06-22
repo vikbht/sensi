@@ -15,10 +15,17 @@ DEFAULTS = {
     # signals are ephemeral alerts and just become clutter.
     "snapshot_retention_days": 30,
     "signal_retention_days": 5,
-    # How many expirations to pull per symbol (keep small to stay under rate limits)
-    "max_expirations": 3,
-    # Skip expirations closer than this many days (expiry-day IV is noisy)
-    "min_days_to_expiry": 2,
+    # Pull every expiration whose DTE falls in [dte_min, dte_max] so every
+    # ticker is measured over a comparable forward horizon (a fixed count
+    # meant ~2 days for daily-listing ETFs but ~3 months for monthly names).
+    # dte_min skips expiry-day IV noise; max_expirations caps the count as a
+    # rate-limit guard for names that list daily within the window.
+    "dte_min": 2,
+    "dte_max": 21,
+    "max_expirations": 6,
+    # Parallel workers for a watchlist sweep (cuts wall time, stays under
+    # Yahoo's rate limits)
+    "scan_workers": 4,
     # Signal thresholds
     "thresholds": {
         # ATM IV must exceed 20d HV by this ratio to flag an IV premium

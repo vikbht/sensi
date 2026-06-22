@@ -24,9 +24,10 @@ class OptionsDataProvider(ABC):
         """Return (last price, daily close series covering >= 60 sessions)."""
 
     @abstractmethod
-    def get_option_chain(self, symbol: str, max_expirations: int,
-                         min_days_to_expiry: int) -> list[dict]:
-        """Return a flat list of contract dicts:
+    def get_option_chain(self, symbol: str, dte_min: int, dte_max: int,
+                         max_expirations: int) -> list[dict]:
+        """Return a flat list of contract dicts for every expiration whose DTE
+        is in [dte_min, dte_max], capped at max_expirations:
         {type: 'call'|'put', expiry: 'YYYY-MM-DD', dte: int, strike: float,
          iv: float, volume: int, open_interest: int, last: float}
         """

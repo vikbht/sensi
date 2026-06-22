@@ -151,7 +151,13 @@ static/                   vanilla-JS dashboard (no build step)
   the newest start (or a manual **Scan now**) takes ownership. If a second
   instance is left running against the same DB it goes passive (its UI shows
   a ⚠ passive badge) rather than writing conflicting data.
-- Keep the watchlist modest (≲15 names at 5-min intervals) to avoid Yahoo
-  rate-limiting; each symbol costs ~1 + `max_expirations` requests per scan.
+- Each scan pulls every expiration in the `dte_min`–`dte_max` window (default
+  2–21 days, capped at `max_expirations`), so all names are measured over a
+  comparable forward horizon rather than a fixed count that meant ~2 days for
+  daily-listing ETFs but months for monthly names. The sweep runs symbols in
+  parallel (`scan_workers`), so it stays fast as the watchlist and the window
+  grow; sweep duration shows next to "last scan". Widening the window or the
+  watchlist still raises Yahoo rate-limit pressure (~1 + expirations-in-window
+  requests per symbol), so keep both sensible.
 - This flags *anomalies*, not trades. Everything here is a starting point for
   research, not financial advice.
