@@ -87,19 +87,26 @@ class YFinanceProvider(OptionsDataProvider):
             return []  # no chain at all — caller treats as "no contracts"
 
         today = date.today()
-        contracts: list[dict] = []
-        picked = 0
-        for exp in expirations:  # yfinance returns these in ascending date order
+        # Eligible = at/after the floor (skip expiry-day IV noise), ascending
+        eligible = []
+        for exp in expirations:
             dte = (datetime.strptime(exp, "%Y-%m-%d").date() - today).days
-            if dte < dte_min:
-                continue
-            if dte > dte_max or picked >= max_expirations:
-                break  # past the window (sorted) or hit the rate-limit cap
+            if dte >= dte_min:
+                eligible.append((exp, dte))
+        if not eligible:
+            return []
+        chosen = [(e, d) for e, d in eligible if d <= dte_max][:max_expirations]
+        if not chosen:
+            # Nothing inside the window — keep the nearest eligible expiry so a
+            # monthly-only name whose next expiry is past dte_max still scans
+            chosen = eligible[:1]
+
+        contracts: list[dict] = []
+        for exp, dte in chosen:
             try:
                 chain = _retry(lambda e=exp: t.option_chain(e), f"{symbol} {exp}")
             except Exception:
                 continue  # skip a bad expiry rather than failing the whole symbol
-            picked += 1
             for opt_type, df in (("call", chain.calls), ("put", chain.puts)):
                 for row in df.itertuples():
                     strike = _f(getattr(row, "strike", None))

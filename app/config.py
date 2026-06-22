@@ -21,8 +21,8 @@ DEFAULTS = {
     # dte_min skips expiry-day IV noise; max_expirations caps the count as a
     # rate-limit guard for names that list daily within the window.
     "dte_min": 2,
-    "dte_max": 21,
-    "max_expirations": 6,
+    "dte_max": 60,
+    "max_expirations": 10,
     # Parallel workers for a watchlist sweep (cuts wall time, stays under
     # Yahoo's rate limits)
     "scan_workers": 4,
