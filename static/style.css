@@ -72,6 +72,11 @@ main {
 .perf-table .kind { color: var(--accent); font-weight: 500; }
 .kind-link { cursor: help; }
 .kind-link:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
+#kind-filter {
+  margin-left: 10px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px;
+  font-size: 12px; cursor: pointer; text-transform: none; letter-spacing: 0;
+}
 .heat-grid .hh.kind-link:hover { color: var(--text); }
 .perf-table .measures { color: var(--muted); font-size: 12px; }
 .perf-table .pos { color: var(--green); }

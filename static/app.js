@@ -2,6 +2,14 @@ const $ = (sel) => document.querySelector(sel);
 
 // Selected symbol: expands its table row and filters the signal feed
 let selectedSymbol = null;
+let kindFilter = '';
+
+// Known signal kinds, for the feed type filter (ordered by interest)
+const SIGNAL_KINDS = [
+  'setup_read', 'confluence', 'squeeze_setup', 'vol_compression',
+  'iv_premium', 'iv_spike', 'unusual_volume', 'put_call_ratio',
+  'gamma_build', 'gamma_flip', 'gamma_pin', 'skew_shift', 'daily_wrap',
+];
 // Scan cadence (minutes), kept in sync by loadConfig — drives the
 // "fresh signal" highlight window
 let scanIntervalMin = 5;
@@ -37,12 +45,18 @@ function rankColor(r) {
 
 function ivRankCell(m) {
   if (m.iv_rank == null) {
-    return `<td class="num muted" title="${m.iv_sessions || 0} sessions — collecting">—</td>`;
+    return `<td class="num muted" title="IV rank: not enough history yet (${m.iv_sessions || 0} sessions, needs ~5)">—</td>`;
   }
   const c = rankColor(m.iv_rank);
-  return `<td><span class="ivrank">` +
+  const r = Math.round(m.iv_rank);
+  const word = r >= 60 ? 'rich — IV expensive vs its own history'
+    : r <= 30 ? 'cheap — IV inexpensive vs its own history'
+    : 'mid-range';
+  const tip = `IV rank ${r} of its ${m.iv_sessions}-session range — ${word}` +
+    (m.iv_pctile != null ? ` (${Math.round(m.iv_pctile)}th percentile)` : '');
+  return `<td title="${tip}"><span class="ivrank">` +
     `<span class="ivrank-track"><span class="ivrank-fill" style="width:${m.iv_rank}%;background:${c}"></span></span>` +
-    `<span class="ivrank-num" style="color:${c}">${Math.round(m.iv_rank)}</span></span></td>`;
+    `<span class="ivrank-num" style="color:${c}">${r}</span></span></td>`;
 }
 
 // IV history per symbol changes slowly — cache so the sparkline doesn't refetch
@@ -177,6 +191,22 @@ function setFilter(sym) {
 }
 $('#clear-filter').onclick = () => setFilter(null);
 
+// Signal-feed type filter
+const kindSelect = $('#kind-filter');
+for (const k of SIGNAL_KINDS) {
+  const opt = document.createElement('option');
+  opt.value = k;
+  opt.textContent = k.replaceAll('_', ' ');
+  kindSelect.appendChild(opt);
+}
+kindSelect.onchange = () => { kindFilter = kindSelect.value; refreshSignals(); };
+
+// Watchlist column headers can link to their glossary entry
+$('#watch-table').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-help-kind]');
+  if (el) { e.stopPropagation(); openHelp('help-' + el.dataset.helpKind); }
+});
+
 // ---- help modal ----
 
 function openHelp(anchorId) {
@@ -284,12 +314,16 @@ function feedSection(box, label) {
 }
 
 async function refreshSignals() {
-  const qs = selectedSymbol ? `&symbol=${selectedSymbol}` : '';
-  const signals = await api(`/api/signals?limit=100${qs}`);
+  const params = ['limit=100'];
+  if (selectedSymbol) params.push(`symbol=${selectedSymbol}`);
+  if (kindFilter) params.push(`kind=${kindFilter}`);
+  const signals = await api(`/api/signals?${params.join('&')}`);
   const box = $('#signals');
-  if (!signals.length && !selectedSymbol) return; // keep the explainer
+  const filtered = selectedSymbol || kindFilter;
+  if (!signals.length && !filtered) return; // keep the explainer
+  const kindLabel = kindFilter ? kindFilter.replaceAll('_', ' ') + ' ' : '';
   box.innerHTML = signals.length ? '' :
-    `<p class="empty">No signals for ${selectedSymbol} yet.</p>`;
+    `<p class="empty">No ${kindLabel}signals${selectedSymbol ? ' for ' + selectedSymbol : ''} yet.</p>`;
   if (!signals.length) return;
 
   const today = signals.filter(s => isToday(s.created_at));

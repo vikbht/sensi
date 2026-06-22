@@ -165,8 +165,8 @@ def iv_history(symbol: str):
 
 
 @app.get("/api/signals")
-def get_signals(limit: int = 100, symbol: str | None = None):
-    return db.recent_signals(limit=min(limit, 500), symbol=symbol)
+def get_signals(limit: int = 100, symbol: str | None = None, kind: str | None = None):
+    return db.recent_signals(limit=min(limit, 500), symbol=symbol, kind=kind)
 
 
 @app.get("/api/snapshots/{symbol}")

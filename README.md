@@ -36,9 +36,10 @@ a symbol; afterwards on the configured interval.
   peak gamma strike, skew, net GEX)
   and filter the feed to that name. Negative numbers render finance-style in
   parentheses.
-- **Signal feed** — split into **Today** and **Older** sections; a purple
-  **daily wrap** card lands at 4:15 PM ET summarizing every name's day
-  (`POST /api/wrap` regenerates it manually); entries
+- **Signal feed** — split into **Today** and **Older** sections, with a
+  type filter (dropdown) that composes with the click-a-row symbol filter;
+  a purple **daily wrap** card lands at 4:15 PM ET summarizing every name's
+  day (`POST /api/wrap` regenerates it manually); entries
   younger than ~2 scan intervals get a brighter card and a `new` pill so the
   latest information stands out. Click a signal's kind label (e.g. GAMMA
   FLIP) to jump straight to its explanation in the help glossary.

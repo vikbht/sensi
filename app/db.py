@@ -409,12 +409,18 @@ def signal_fired_recently(symbol: str, kind: str, cooldown_minutes: int) -> bool
     return row is not None
 
 
-def recent_signals(limit: int = 100, symbol: str | None = None) -> list[dict]:
+def recent_signals(limit: int = 100, symbol: str | None = None,
+                   kind: str | None = None) -> list[dict]:
     q = "SELECT * FROM signals"
-    args: tuple = ()
+    conds, args = [], []
     if symbol:
-        q += " WHERE symbol = ?"
-        args = (symbol.upper(),)
+        conds.append("symbol = ?")
+        args.append(symbol.upper())
+    if kind:
+        conds.append("kind = ?")
+        args.append(kind)
+    if conds:
+        q += " WHERE " + " AND ".join(conds)
     q += " ORDER BY created_at DESC, id DESC LIMIT ?"
-    rows = get_conn().execute(q, args + (limit,)).fetchall()
+    rows = get_conn().execute(q, (*args, limit)).fetchall()
     return [dict(r) for r in rows]
