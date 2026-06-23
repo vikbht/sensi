@@ -62,6 +62,17 @@ def _run_scan(force: bool = False):
         _scan_lock.release()
 
 
+def _threaded(fn, *args, **kwargs):
+    """Run fn on a daemon thread that closes its thread-local DB connection
+    when done, so ephemeral threads don't leak SQLite fds (issue #34)."""
+    def run():
+        try:
+            fn(*args, **kwargs)
+        finally:
+            db.close_conn()
+    threading.Thread(target=run, daemon=True).start()
+
+
 def _scan_single(symbol: str):
     """Scan one symbol immediately (any hour) — used when it's added to the
     watchlist so its row gets price/metrics without waiting for a sweep."""
@@ -92,8 +103,8 @@ async def lifespan(app: FastAPI):
                       timezone=market_clock.ET, id="compute_outcomes",
                       replace_existing=True)
     scheduler.start()
-    threading.Thread(target=_run_scan, daemon=True).start()  # scan on boot
-    threading.Thread(target=scanner.compute_outcomes, daemon=True).start()  # seed/mature
+    _threaded(_run_scan)  # scan on boot
+    _threaded(scanner.compute_outcomes)  # seed/mature outcomes
     yield
     scheduler.shutdown(wait=False)
 
@@ -126,7 +137,7 @@ def add_to_watchlist(body: SymbolBody):
     if not sym or len(sym) > 10:
         raise HTTPException(400, "invalid symbol")
     db.add_symbol(sym)
-    threading.Thread(target=_scan_single, args=(sym,), daemon=True).start()
+    _threaded(_scan_single, sym)
     return db.list_watchlist()
 
 
@@ -188,14 +199,13 @@ def put_config(cfg: dict):
 
 @app.post("/api/scan")
 def trigger_scan():
-    threading.Thread(target=_run_scan, kwargs={"force": True}, daemon=True).start()
+    _threaded(_run_scan, force=True)
     return {"started": True}
 
 
 @app.post("/api/wrap")
 def trigger_wrap():
-    threading.Thread(target=scanner.generate_daily_wrap,
-                     kwargs={"force": True}, daemon=True).start()
+    _threaded(scanner.generate_daily_wrap, force=True)
     return {"started": True}
 
 
@@ -208,7 +218,7 @@ def get_outcomes():
 
 @app.post("/api/outcomes/compute")
 def trigger_outcomes():
-    threading.Thread(target=scanner.compute_outcomes, daemon=True).start()
+    _threaded(scanner.compute_outcomes)
     return {"started": True}
 
 

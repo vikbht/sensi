@@ -92,6 +92,15 @@ def get_conn() -> sqlite3.Connection:
     return conn
 
 
+def close_conn() -> None:
+    """Close this thread's connection — call at the end of an ephemeral worker
+    thread so its SQLite fds (db + WAL) don't leak (issue #34)."""
+    conn = getattr(_local, "conn", None)
+    if conn is not None:
+        conn.close()
+        _local.conn = None
+
+
 def _migrate(conn: sqlite3.Connection) -> None:
     """Additive migrations for databases created before a column existed."""
     cols = {row[1] for row in conn.execute("PRAGMA table_info(snapshots)")}

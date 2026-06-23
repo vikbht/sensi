@@ -416,22 +416,34 @@ def compute_outcomes() -> dict:
     return {"filled": filled, "purged": removed}
 
 
+# A single persistent pool reused across sweeps — a fresh pool per sweep
+# would spawn new worker threads each time, each leaking a thread-local
+# SQLite connection (db + WAL fds) that's never closed (issue #34).
+_pool: ThreadPoolExecutor | None = None
+
+
+def _get_pool(workers: int) -> ThreadPoolExecutor:
+    global _pool
+    if _pool is None:
+        _pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="scan")
+    return _pool
+
+
 def scan_watchlist() -> dict:
     cfg = config.load()
     symbols = db.list_watchlist()
     results: dict[str, object] = {}
-    # Scan symbols in parallel — each thread gets its own SQLite connection
-    # (db uses thread-local connections), so concurrent writes are safe.
-    workers = max(1, min(cfg.get("scan_workers", 4), len(symbols) or 1))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(scan_symbol, sym, cfg): sym for sym in symbols}
-        for fut in as_completed(futures):
-            sym = futures[fut]
-            try:
-                results[sym] = {"signals": len(fut.result()), "ok": True}
-            except Exception as e:  # one bad ticker must not kill the sweep
-                log.exception("scan failed for %s", sym)
-                results[sym] = {"ok": False, "error": str(e)}
+    # Scan symbols in parallel on a persistent pool — each worker thread keeps
+    # its own SQLite connection (thread-local), reused sweep to sweep.
+    pool = _get_pool(max(1, cfg.get("scan_workers", 4)))
+    futures = {pool.submit(scan_symbol, sym, cfg): sym for sym in symbols}
+    for fut in as_completed(futures):
+        sym = futures[fut]
+        try:
+            results[sym] = {"signals": len(fut.result()), "ok": True}
+        except Exception as e:  # one bad ticker must not kill the sweep
+            log.exception("scan failed for %s", sym)
+            results[sym] = {"ok": False, "error": str(e)}
     purged = db.purge_old(cfg["snapshot_retention_days"], cfg["signal_retention_days"])
     orphans = db.purge_orphan_snapshots()
     if any(purged) or orphans:
